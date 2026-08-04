@@ -65,8 +65,8 @@ Este projeto propõe um sistema automatizado capaz de:
 
 ### Clonando o repositório
 ```bash
-git clone <URL_DO_REPOSITORIO>
-cd <NOME_DO_REPOSITORIO>
+git clone <https://github.com/Gustavovieira29/truck_check>
+cd <https://github.com/Gustavovieira29/truck_check>
 ```
 
 ### Configuração do Back-end (NestJS)
