@@ -1,11 +1,11 @@
 # Sistema de Automação de Manutenção de Frotas e Ferramentas
 
 ## Integrantes do Grupo
-- Gustavo Vieira
-- Yasmin Vier Scotti
-- Alessandro Zientara
-- Abel Felipe
-- Pedro Neto
+* Gustavo Vieira
+* Yasmin Vier Scotti
+* Alessandro Zientara
+* Abel Felipe
+* Pedro Neto
 
 ## Resumo da Automação Proposta
 
@@ -19,38 +19,38 @@ físicos), o que gera risco de descumprimento de prazos, perda de documentação
 apontar responsáveis.
 
 Este projeto propõe um sistema automatizado capaz de:
-- Monitorar o estado de manutenção de veículos e ferramentas;
-- Controlar prazos, responsáveis e histórico de intervenções;
-- Identificar equipamentos com manutenção vencida, próxima do vencimento ou com pendências;
-- Permitir que o responsável tire uma foto do veículo/ferramenta no momento da conferência, para
+* Monitorar o estado de manutenção de veículos e ferramentas;
+* Controlar prazos, responsáveis e histórico de intervenções;
+* Identificar equipamentos com manutenção vencida, próxima do vencimento ou com pendências;
+* Permitir que o responsável tire uma foto do veículo/ferramenta no momento da conferência, para
   que uma Inteligência Artificial analise a imagem e faça uma checagem automática das condições
   do equipamento, apontando possíveis avarias, desgastes ou irregularidades visuais;
-- Gerar relatórios periódicos em PDF, consolidando o status de cada ativo (incluindo o resultado
+* Gerar relatórios periódicos em PDF, consolidando o status de cada ativo (incluindo o resultado
   da checagem por foto);
-- Enviar automaticamente esses relatórios por e-mail aos responsáveis, com periodicidade
+* Enviar automaticamente esses relatórios por e-mail aos responsáveis, com periodicidade
   definida (diária, semanal ou mensal), garantindo rastreabilidade e conformidade contínua com
   as exigências regulatórias.
 
 ### Funcionalidades Previstas
-- CRUD de veículos e ferramentas;
-- CRUD de peças e insumos vinculados a cada equipamento;
-- Controle de datas de manutenção (última, próxima, vencida);
-- Alertas automáticos de vencimento;
-- Captura de foto do veículo/ferramenta via aplicativo/painel para conferência;
-- Checagem automática das condições do equipamento por Inteligência Artificial (análise de
+* CRUD de veículos e ferramentas;
+* CRUD de peças e insumos vinculados a cada equipamento;
+* Controle de datas de manutenção (última, próxima, vencida);
+* Alertas automáticos de vencimento;
+* Captura de foto do veículo/ferramenta via aplicativo/painel para conferência;
+* Checagem automática das condições do equipamento por Inteligência Artificial (análise de
   imagem, identificando avarias, desgastes ou irregularidades visuais);
-- Geração de relatórios em PDF, incluindo o resultado da checagem por IA;
-- Envio automático de relatórios por e-mail;
-- Painel de status geral da frota/ferramentas.
+* Geração de relatórios em PDF, incluindo o resultado da checagem por IA;
+* Envio automático de relatórios por e-mail;
+* Painel de status geral da frota/ferramentas.
 
 ## Tecnologias e Ferramentas Utilizadas
-- **TypeScript** — linguagem principal do projeto;
-- **React** — front-end, painel de gestão dos ativos;
-- **NestJS** — back-end e regras de negócio;
-- **PostgreSQL** — banco de dados relacional para cadastro de ativos, peças e histórico;
-- **Biblioteca de geração de PDF** *(ex: Puppeteer, PDFKit ou similar — definir a escolhida)*;
-- **Serviço de envio de e-mail** *(ex: Nodemailer + SMTP, SendGrid ou similar — definir o escolhido)*;
-- **Serviço de IA para análise de imagem** *(ex: API de visão computacional para checagem
+* **TypeScript** — linguagem principal do projeto;
+* **React** — front-end, painel de gestão dos ativos;
+* **NestJS** — back-end e regras de negócio;
+* **PostgreSQL** — banco de dados relacional para cadastro de ativos, peças e histórico;
+* **Biblioteca de geração de PDF** *(ex: Puppeteer, PDFKit ou similar — definir a escolhida)*;
+* **Serviço de envio de e-mail** *(ex: Nodemailer + SMTP, SendGrid ou similar — definir o escolhido)*;
+* **Serviço de IA para análise de imagem** *(ex: API de visão computacional para checagem
   automática das fotos de veículos e ferramentas — definir o serviço/modelo escolhido)*.
 
 ## Instruções de Instalação, Dependências e Execução
@@ -59,14 +59,14 @@ Este projeto propõe um sistema automatizado capaz de:
 > back-end estiverem em pastas separadas `/frontend` e `/backend`).
 
 ### Pré-requisitos
-- [Node.js](https://nodejs.org/) (versão 18 ou superior recomendada)
-- [PostgreSQL](https://www.postgresql.org/) instalado e em execução
-- npm ou yarn
+* [Node.js](https://nodejs.org/) (versão 18 ou superior recomendada)
+* [PostgreSQL](https://www.postgresql.org/) instalado e em execução
+* npm ou yarn
 
 ### Clonando o repositório
 ```bash
-git clone <https://github.com/Gustavovieira29/truck_check>
-cd <https://github.com/Gustavovieira29/truck_check>
+git clone <URL_DO_REPOSITORIO>
+cd <NOME_DO_REPOSITORIO>
 ```
 
 ### Configuração do Back-end (NestJS)
