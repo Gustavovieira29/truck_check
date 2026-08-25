@@ -1,5 +1,8 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { toast } from 'sonner'
 import { ASSETS, type Asset, type AssetType, type StatusType } from '../data/mockData'
+
+const API_URL = 'http://localhost:3001/assets'
 
 const STATUS_LABELS: Record<StatusType, string> = {
   ok: 'Regular',
@@ -16,20 +19,154 @@ const TYPE_LABELS: Record<AssetType, string> = {
 }
 
 export default function Assets() {
+  const [assets, setAssets] = useState<Asset[]>(ASSETS)
   const [search, setSearch] = useState('')
   const [typeFilter, setTypeFilter] = useState<AssetType | 'all'>('all')
   const [statusFilter, setStatusFilter] = useState<StatusType | 'all'>('all')
+  const [viewMode, setViewMode] = useState<'all' | 'vehicles'>('all')
   const [selected, setSelected] = useState<Asset | null>(null)
+  const [showVehicleModal, setShowVehicleModal] = useState(false)
+  const [editingVehicle, setEditingVehicle] = useState<Asset | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
 
-  const filtered = ASSETS.filter(a => {
+  useEffect(() => {
+    let isMounted = true
+
+    async function loadAssets() {
+      try {
+        const response = await fetch(API_URL)
+        if (!response.ok) {
+          throw new Error('Falha ao carregar ativos')
+        }
+
+        const data = await response.json() as Asset[]
+        if (isMounted) {
+          setAssets(data)
+        }
+      } catch {
+        toast.error('Não foi possível carregar os ativos da API', {
+          description: 'Usando dados locais temporariamente. Inicie o json-server para persistência.',
+        })
+      } finally {
+        if (isMounted) {
+          setIsLoading(false)
+        }
+      }
+    }
+
+    loadAssets()
+
+    return () => {
+      isMounted = false
+    }
+  }, [])
+
+  const filtered = assets.filter(a => {
     const matchSearch = search === '' ||
       a.name.toLowerCase().includes(search.toLowerCase()) ||
       a.code.toLowerCase().includes(search.toLowerCase()) ||
       a.responsible.toLowerCase().includes(search.toLowerCase())
-    const matchType = typeFilter === 'all' || a.type === typeFilter
+    const effectiveTypeFilter = viewMode === 'vehicles' ? 'vehicle' : typeFilter
+    const matchType = effectiveTypeFilter === 'all' || a.type === effectiveTypeFilter
     const matchStatus = statusFilter === 'all' || a.status === statusFilter
     return matchSearch && matchType && matchStatus
   })
+
+  const vehicleCount = assets.filter(asset => asset.type === 'vehicle').length
+
+  const handleOpenCreateVehicle = () => {
+    setEditingVehicle(null)
+    setShowVehicleModal(true)
+  }
+
+  const handleOpenEditVehicle = () => {
+    if (!selected) {
+      toast.error('Selecione um veículo para editar')
+      return
+    }
+
+    if (selected.type !== 'vehicle') {
+      toast.error('A edição está disponível apenas para veículos')
+      return
+    }
+
+    setEditingVehicle(selected)
+    setShowVehicleModal(true)
+  }
+
+  const handleSaveVehicle = async (vehicle: Asset) => {
+    const isEditing = Boolean(editingVehicle)
+    const url = isEditing ? `${API_URL}/${vehicle.id}` : API_URL
+    const method = isEditing ? 'PUT' : 'POST'
+
+    try {
+      const response = await fetch(url, {
+        method,
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(vehicle),
+      })
+
+      if (!response.ok) {
+        throw new Error('Falha ao salvar veículo')
+      }
+
+      const savedVehicle = await response.json() as Asset
+
+      setAssets(current => {
+        if (isEditing) {
+          return current.map(item => item.id === savedVehicle.id ? savedVehicle : item)
+        }
+
+        return [savedVehicle, ...current]
+      })
+
+      setSelected(savedVehicle)
+      setShowVehicleModal(false)
+      setEditingVehicle(null)
+
+      toast.success(isEditing ? 'Veículo atualizado' : 'Veículo adicionado', {
+        description: `${savedVehicle.code} · ${savedVehicle.name}`,
+      })
+    } catch {
+      toast.error('Falha ao salvar veículo', {
+        description: 'Verifique se o json-server está rodando em localhost:3001.',
+      })
+    }
+  }
+
+  const handleDeleteVehicle = async () => {
+    if (!selected) {
+      toast.error('Selecione um veículo para excluir')
+      return
+    }
+
+    if (selected.type !== 'vehicle') {
+      toast.error('A exclusão está disponível apenas para veículos')
+      return
+    }
+
+    try {
+      const response = await fetch(`${API_URL}/${selected.id}`, {
+        method: 'DELETE',
+      })
+
+      if (!response.ok) {
+        throw new Error('Falha ao excluir veículo')
+      }
+
+      setAssets(current => current.filter(item => item.id !== selected.id))
+      toast.success('Veículo excluído', {
+        description: `${selected.code} · ${selected.name}`,
+      })
+      setSelected(null)
+    } catch {
+      toast.error('Falha ao excluir veículo', {
+        description: 'Verifique se o json-server está rodando em localhost:3001.',
+      })
+    }
+  }
 
   return (
     <div style={{ display: 'flex', gap: 16, height: '100%' }}>
@@ -53,8 +190,9 @@ export default function Assets() {
               outline: 'none',
             }}
           />
-          <FilterPill label="Todos" active={typeFilter === 'all'} onClick={() => setTypeFilter('all')} />
-          <FilterPill label="Veículos" active={typeFilter === 'vehicle'} onClick={() => setTypeFilter('vehicle')} />
+          <FilterPill label="Todos" active={viewMode === 'all' && typeFilter === 'all'} onClick={() => { setViewMode('all'); setTypeFilter('all') }} />
+          <FilterPill label={`Só Veículos (${vehicleCount})`} active={viewMode === 'vehicles'} onClick={() => setViewMode('vehicles')} />
+          <FilterPill label="Veículos" active={viewMode === 'all' && typeFilter === 'vehicle'} onClick={() => { setViewMode('all'); setTypeFilter('vehicle') }} />
           <FilterPill label="Ferramentas" active={typeFilter === 'tool'} onClick={() => setTypeFilter('tool')} />
           <FilterPill label="Equipamentos" active={typeFilter === 'equipment'} onClick={() => setTypeFilter('equipment')} />
           <div style={{ width: 1, height: 24, background: 'var(--border)' }} />
@@ -62,6 +200,17 @@ export default function Assets() {
           <FilterPill label="Atenção" active={statusFilter === 'warning'} onClick={() => setStatusFilter(statusFilter === 'warning' ? 'all' : 'warning')} color="var(--status-warning)" />
           <FilterPill label="Crítico" active={statusFilter === 'critical'} onClick={() => setStatusFilter(statusFilter === 'critical' ? 'all' : 'critical')} color="var(--status-critical)" />
           <FilterPill label="Vencido" active={statusFilter === 'overdue'} onClick={() => setStatusFilter(statusFilter === 'overdue' ? 'all' : 'overdue')} color="var(--status-overdue)" />
+          <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
+            <button className="btn btn-ghost" type="button" onClick={handleDeleteVehicle}>
+              Excluir Veículo
+            </button>
+            <button className="btn btn-secondary" type="button" onClick={handleOpenEditVehicle}>
+              Editar Veículo
+            </button>
+            <button className="btn btn-primary" type="button" onClick={handleOpenCreateVehicle}>
+              + Novo Veículo
+            </button>
+          </div>
         </div>
 
         {/* Table */}
@@ -81,6 +230,13 @@ export default function Assets() {
                 </tr>
               </thead>
               <tbody>
+                {!isLoading && filtered.length === 0 && (
+                  <tr>
+                    <td colSpan={8} style={{ padding: '20px 16px', textAlign: 'center', color: 'var(--muted-foreground)' }}>
+                      Nenhum ativo encontrado.
+                    </td>
+                  </tr>
+                )}
                 {filtered.map(asset => (
                   <tr
                     key={asset.id}
@@ -134,7 +290,7 @@ export default function Assets() {
           </div>
           <div style={{ padding: '10px 16px', borderTop: '1px solid var(--border)' }}>
             <span className="font-mono" style={{ fontSize: 10, color: 'var(--muted-foreground)' }}>
-              {filtered.length} de {ASSETS.length} ativos
+              {isLoading ? 'Carregando ativos...' : `${filtered.length} de ${assets.length} ativos`}
             </span>
           </div>
         </div>
@@ -203,9 +359,217 @@ export default function Assets() {
             <button className="btn btn-primary" style={{ width: '100%', justifyContent: 'center' }}>
               Registrar Manutenção
             </button>
+            {selected.type === 'vehicle' && (
+              <>
+                <button className="btn btn-secondary" type="button" style={{ width: '100%', justifyContent: 'center' }} onClick={handleOpenEditVehicle}>
+                  Editar Veículo
+                </button>
+                <button className="btn btn-ghost" type="button" style={{ width: '100%', justifyContent: 'center' }} onClick={handleDeleteVehicle}>
+                  Excluir Veículo
+                </button>
+              </>
+            )}
           </div>
         </div>
       )}
+
+      {showVehicleModal && (
+        <VehicleModal
+          asset={editingVehicle}
+          onClose={() => {
+            setShowVehicleModal(false)
+            setEditingVehicle(null)
+          }}
+          onSave={handleSaveVehicle}
+        />
+      )}
+    </div>
+  )
+}
+
+type VehicleModalProps = {
+  asset: Asset | null
+  onClose: () => void
+  onSave: (vehicle: Asset) => void | Promise<void>
+}
+
+function VehicleModal({ asset, onClose, onSave }: VehicleModalProps) {
+  const [form, setForm] = useState({
+    code: asset?.code ?? `VEI-${String(Date.now()).slice(-3)}`,
+    name: asset?.name ?? '',
+    category: asset?.category ?? 'Veículo',
+    plate: asset?.plate ?? '',
+    responsible: asset?.responsible ?? '',
+    location: asset?.location ?? '',
+    status: asset?.status ?? 'ok',
+    brand: asset?.brand ?? '',
+    model: asset?.model ?? '',
+    year: String(asset?.year ?? new Date().getFullYear()),
+    mileage: asset?.mileage ? String(asset.mileage) : '',
+    nextMaintenance: asset?.nextMaintenance ?? new Date().toISOString().slice(0, 10),
+    lastInspection: asset?.lastInspection ?? new Date().toISOString().slice(0, 10),
+    notes: asset?.notes ?? '',
+  })
+
+  const handleChange = (field: keyof typeof form, value: string) => {
+    setForm(current => ({ ...current, [field]: value }))
+  }
+
+  const handleSubmit = () => {
+    if (!form.code.trim() || !form.name.trim() || !form.responsible.trim() || !form.location.trim() || !form.brand.trim() || !form.model.trim() || !form.year.trim() || !form.nextMaintenance) {
+      toast.error('Preencha os campos obrigatórios do veículo')
+      return
+    }
+
+    const normalizedPlate = form.plate.trim().toUpperCase()
+    const platePattern = /^[A-Z]{3}-?[0-9][A-Z0-9][0-9]{2}$/
+    if (normalizedPlate && !platePattern.test(normalizedPlate)) {
+      toast.error('Placa inválida', {
+        description: 'Use o formato ABC-1D23 ou ABC1234.',
+      })
+      return
+    }
+
+    const year = Number(form.year)
+    if (!Number.isFinite(year) || year < 1950 || year > new Date().getFullYear() + 1) {
+      toast.error('Ano inválido', {
+        description: 'Informe um ano válido para o veículo.',
+      })
+      return
+    }
+
+    const mileage = form.mileage.trim() ? Number(form.mileage) : undefined
+    if (form.mileage.trim() && (!Number.isFinite(mileage) || mileage < 0)) {
+      toast.error('Hodômetro inválido', {
+        description: 'O hodômetro deve ser um número positivo.',
+      })
+      return
+    }
+
+    const nextMaintenanceDate = new Date(`${form.nextMaintenance}T00:00:00`)
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    const daysUntilMaintenance = Math.ceil((nextMaintenanceDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
+
+    const vehicle: Asset = {
+      id: asset?.id ?? `a-${Date.now()}`,
+      code: form.code.trim(),
+      name: form.name.trim(),
+      type: 'vehicle',
+      category: form.category.trim(),
+      plate: normalizedPlate || undefined,
+      responsible: form.responsible.trim(),
+      location: form.location.trim(),
+      status: form.status as StatusType,
+      lastInspection: form.lastInspection,
+      nextMaintenance: form.nextMaintenance,
+      daysUntilMaintenance,
+      mileage,
+      brand: form.brand.trim(),
+      model: form.model.trim(),
+      year,
+      notes: form.notes.trim() || undefined,
+    }
+
+    void onSave(vehicle)
+  }
+
+  return (
+    <div
+      style={{
+        position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 100,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+      }}
+      onClick={onClose}
+    >
+      <div
+        style={{
+          background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 4,
+          width: 640, padding: 24,
+        }}
+        onClick={e => e.stopPropagation()}
+      >
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+          <h2 style={{ fontSize: 15, fontWeight: 600, color: 'var(--foreground)' }}>{asset ? 'Editar Veículo' : 'Novo Veículo'}</h2>
+          <button type="button" onClick={onClose} style={{ background: 'none', border: 'none', color: 'var(--muted-foreground)', cursor: 'pointer', fontSize: 20, lineHeight: 1 }}>×</button>
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+          <ModalField label="Código">
+            <input style={inputStyle} value={form.code} onChange={e => handleChange('code', e.target.value)} />
+          </ModalField>
+          <ModalField label="Nome">
+            <input style={inputStyle} value={form.name} onChange={e => handleChange('name', e.target.value)} />
+          </ModalField>
+          <ModalField label="Marca">
+            <input style={inputStyle} value={form.brand} onChange={e => handleChange('brand', e.target.value)} />
+          </ModalField>
+          <ModalField label="Modelo">
+            <input style={inputStyle} value={form.model} onChange={e => handleChange('model', e.target.value)} />
+          </ModalField>
+          <ModalField label="Ano">
+            <input type="number" style={inputStyle} value={form.year} onChange={e => handleChange('year', e.target.value)} />
+          </ModalField>
+          <ModalField label="Placa">
+            <input style={inputStyle} value={form.plate} onChange={e => handleChange('plate', e.target.value)} />
+          </ModalField>
+          <ModalField label="Responsável">
+            <input style={inputStyle} value={form.responsible} onChange={e => handleChange('responsible', e.target.value)} />
+          </ModalField>
+          <ModalField label="Localização">
+            <input style={inputStyle} value={form.location} onChange={e => handleChange('location', e.target.value)} />
+          </ModalField>
+          <ModalField label="Categoria">
+            <input style={inputStyle} value={form.category} onChange={e => handleChange('category', e.target.value)} />
+          </ModalField>
+          <ModalField label="Hodômetro (km)">
+            <input type="number" style={inputStyle} value={form.mileage} onChange={e => handleChange('mileage', e.target.value)} />
+          </ModalField>
+          <ModalField label="Última inspeção">
+            <input type="date" style={inputStyle} value={form.lastInspection} onChange={e => handleChange('lastInspection', e.target.value)} />
+          </ModalField>
+          <ModalField label="Próxima manutenção">
+            <input type="date" style={inputStyle} value={form.nextMaintenance} onChange={e => handleChange('nextMaintenance', e.target.value)} />
+          </ModalField>
+          <ModalField label="Status">
+            <select style={inputStyle} value={form.status} onChange={e => handleChange('status', e.target.value)}>
+              <option value="ok">Regular</option>
+              <option value="warning">Atenção</option>
+              <option value="critical">Crítico</option>
+              <option value="overdue">Vencido</option>
+              <option value="inactive">Inativo</option>
+            </select>
+          </ModalField>
+          <ModalField label="Observações">
+            <textarea rows={3} style={{ ...inputStyle, resize: 'none', fontFamily: 'inherit' }} value={form.notes} onChange={e => handleChange('notes', e.target.value)} />
+          </ModalField>
+        </div>
+
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 20 }}>
+          <button className="btn btn-ghost" type="button" onClick={onClose}>Cancelar</button>
+          <button className="btn btn-primary" type="button" onClick={handleSubmit}>{asset ? 'Salvar alterações' : 'Cadastrar veículo'}</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+const inputStyle: React.CSSProperties = {
+  width: '100%',
+  background: 'var(--secondary)',
+  border: '1px solid var(--border)',
+  borderRadius: 3,
+  padding: '7px 10px',
+  color: 'var(--foreground)',
+  fontSize: 13,
+  outline: 'none',
+}
+
+function ModalField({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <label style={{ display: 'block', fontSize: 11, color: 'var(--muted-foreground)', marginBottom: 5, fontWeight: 500 }}>{label}</label>
+      {children}
     </div>
   )
 }

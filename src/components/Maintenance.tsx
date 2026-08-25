@@ -1,6 +1,8 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import { ASSETS, MAINTENANCES, type Asset, type MaintenanceRecord } from '../data/mockData'
+
+const API_URL = 'http://localhost:3001/maintenances'
 
 const STATUS_MAP: Record<MaintenanceRecord['status'], { label: string; badge: string }> = {
   scheduled: { label: 'Agendado', badge: 'badge-inactive' },
@@ -21,6 +23,39 @@ export default function Maintenance() {
   const [statusFilter, setStatusFilter] = useState<MaintenanceRecord['status'] | 'all'>('all')
   const [showModal, setShowModal] = useState(false)
   const [maintenances, setMaintenances] = useState(MAINTENANCES)
+  const [isLoading, setIsLoading] = useState(true)
+
+  useEffect(() => {
+    let isMounted = true
+
+    async function loadMaintenances() {
+      try {
+        const response = await fetch(API_URL)
+        if (!response.ok) {
+          throw new Error('Falha ao carregar manutenções')
+        }
+
+        const data = await response.json() as MaintenanceRecord[]
+        if (isMounted) {
+          setMaintenances(data)
+        }
+      } catch {
+        toast.error('Não foi possível carregar da API', {
+          description: 'Usando dados locais temporariamente. Inicie o json-server para persistência.',
+        })
+      } finally {
+        if (isMounted) {
+          setIsLoading(false)
+        }
+      }
+    }
+
+    loadMaintenances()
+
+    return () => {
+      isMounted = false
+    }
+  }, [])
 
   const sorted = [...maintenances].sort((a, b) => a.daysUntil - b.daysUntil)
   const filtered = sorted.filter(m => statusFilter === 'all' || m.status === statusFilter)
@@ -38,21 +73,62 @@ export default function Maintenance() {
 
   const overdueAssets = ASSETS.filter(asset => asset.daysUntilMaintenance < 0)
 
-  const handleCreateMaintenance = (record: MaintenanceRecord) => {
-    setMaintenances(current => [record, ...current])
-    setShowModal(false)
-
-    toast.success('Manutenção adicionada', {
-      description: `${record.assetCode} · ${record.assetName}`,
-    })
-
-    if (record.daysUntil < 0) {
-      toast.warning('Ativo com manutenção atrasada', {
-        description: `${record.assetCode} entrou na lista como vencido.`,
+  const handleCreateMaintenance = async (record: MaintenanceRecord) => {
+    try {
+      const response = await fetch(API_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(record),
       })
-    } else {
-      toast.info('Manutenção programada', {
-        description: `${record.description.slice(0, 48)}${record.description.length > 48 ? '...' : ''}`,
+
+      if (!response.ok) {
+        throw new Error('Falha ao salvar manutenção')
+      }
+
+      const savedRecord = await response.json() as MaintenanceRecord
+      setMaintenances(current => [savedRecord, ...current])
+      setShowModal(false)
+
+      toast.success('Manutenção adicionada', {
+        description: `${savedRecord.assetCode} · ${savedRecord.assetName}`,
+      })
+
+      if (savedRecord.daysUntil < 0) {
+        toast.warning('Ativo com manutenção atrasada', {
+          description: `${savedRecord.assetCode} entrou na lista como vencido.`,
+        })
+      } else {
+        toast.info('Manutenção programada', {
+          description: `${savedRecord.description.slice(0, 48)}${savedRecord.description.length > 48 ? '...' : ''}`,
+        })
+      }
+    } catch {
+      toast.error('Falha ao salvar manutenção', {
+        description: 'Verifique se o json-server está rodando em localhost:3001.',
+      })
+    }
+  }
+
+  const handleDeleteMaintenance = async (record: MaintenanceRecord) => {
+    try {
+      const response = await fetch(`${API_URL}/${record.id}`, {
+        method: 'DELETE',
+      })
+
+      if (!response.ok) {
+        throw new Error('Falha ao excluir manutenção')
+      }
+
+      setMaintenances(current => current.filter(item => item.id !== record.id))
+
+      toast.success('Manutenção excluída', {
+        description: `${record.assetCode} · ${record.assetName}`,
+      })
+    } catch {
+      toast.error('Falha ao excluir manutenção', {
+        description: 'Verifique se o json-server está rodando em localhost:3001.',
       })
     }
   }
@@ -128,9 +204,17 @@ export default function Maintenance() {
               <th>Fornecedor</th>
               <th>Custo</th>
               <th>Status</th>
+              <th>Ações</th>
             </tr>
           </thead>
           <tbody>
+            {!isLoading && filtered.length === 0 && (
+              <tr>
+                <td colSpan={9} style={{ padding: '20px 16px', textAlign: 'center', color: 'var(--muted-foreground)' }}>
+                  Nenhuma manutenção encontrada.
+                </td>
+              </tr>
+            )}
             {filtered.map(m => (
               <tr key={m.id}>
                 <td style={{ minWidth: 100 }}>
@@ -187,13 +271,27 @@ export default function Maintenance() {
                     {STATUS_MAP[m.status].label}
                   </span>
                 </td>
+                <td>
+                  <button
+                    type="button"
+                    className="btn btn-ghost"
+                    style={{ padding: '4px 10px', fontSize: 11 }}
+                    onClick={(event) => {
+                      event.preventDefault()
+                      event.stopPropagation()
+                      void handleDeleteMaintenance(m)
+                    }}
+                  >
+                    Excluir
+                  </button>
+                </td>
               </tr>
             ))}
           </tbody>
         </table>
         <div style={{ padding: '10px 16px', borderTop: '1px solid var(--border)' }}>
           <span className="font-mono" style={{ fontSize: 10, color: 'var(--muted-foreground)' }}>
-            {filtered.length} registro(s) · Custo total previsto: R$ {totalCost.toLocaleString('pt-BR')}
+            {isLoading ? 'Carregando manutenções...' : `${filtered.length} registro(s) · Custo total previsto: R$ ${totalCost.toLocaleString('pt-BR')}`}
           </span>
         </div>
       </div>
@@ -213,7 +311,7 @@ export default function Maintenance() {
 type NewMaintenanceModalProps = {
   overdueAssets: Asset[]
   onClose: () => void
-  onSave: (record: MaintenanceRecord) => void
+  onSave: (record: MaintenanceRecord) => void | Promise<void>
 }
 
 function NewMaintenanceModal({ overdueAssets, onClose, onSave }: NewMaintenanceModalProps) {
