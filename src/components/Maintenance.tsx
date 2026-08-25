@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { MAINTENANCES, type MaintenanceRecord } from '../data/mockData'
+import { toast } from 'sonner'
+import { ASSETS, MAINTENANCES, type Asset, type MaintenanceRecord } from '../data/mockData'
 
 const STATUS_MAP: Record<MaintenanceRecord['status'], { label: string; badge: string }> = {
   scheduled: { label: 'Agendado', badge: 'badge-inactive' },
@@ -19,20 +20,42 @@ const TYPE_MAP: Record<MaintenanceRecord['type'], string> = {
 export default function Maintenance() {
   const [statusFilter, setStatusFilter] = useState<MaintenanceRecord['status'] | 'all'>('all')
   const [showModal, setShowModal] = useState(false)
+  const [maintenances, setMaintenances] = useState(MAINTENANCES)
 
-  const sorted = [...MAINTENANCES].sort((a, b) => a.daysUntil - b.daysUntil)
+  const sorted = [...maintenances].sort((a, b) => a.daysUntil - b.daysUntil)
   const filtered = sorted.filter(m => statusFilter === 'all' || m.status === statusFilter)
 
   const countsByStatus = {
-    overdue: MAINTENANCES.filter(m => m.status === 'overdue').length,
-    in_progress: MAINTENANCES.filter(m => m.status === 'in_progress').length,
-    scheduled: MAINTENANCES.filter(m => m.status === 'scheduled').length,
-    completed: MAINTENANCES.filter(m => m.status === 'completed').length,
+    overdue: maintenances.filter(m => m.status === 'overdue').length,
+    in_progress: maintenances.filter(m => m.status === 'in_progress').length,
+    scheduled: maintenances.filter(m => m.status === 'scheduled').length,
+    completed: maintenances.filter(m => m.status === 'completed').length,
   }
 
-  const totalCost = MAINTENANCES
+  const totalCost = maintenances
     .filter(m => m.cost && m.status !== 'cancelled')
     .reduce((acc, m) => acc + (m.cost || 0), 0)
+
+  const overdueAssets = ASSETS.filter(asset => asset.daysUntilMaintenance < 0)
+
+  const handleCreateMaintenance = (record: MaintenanceRecord) => {
+    setMaintenances(current => [record, ...current])
+    setShowModal(false)
+
+    toast.success('Manutenção adicionada', {
+      description: `${record.assetCode} · ${record.assetName}`,
+    })
+
+    if (record.daysUntil < 0) {
+      toast.warning('Ativo com manutenção atrasada', {
+        description: `${record.assetCode} entrou na lista como vencido.`,
+      })
+    } else {
+      toast.info('Manutenção programada', {
+        description: `${record.description.slice(0, 48)}${record.description.length > 48 ? '...' : ''}`,
+      })
+    }
+  }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -176,12 +199,82 @@ export default function Maintenance() {
       </div>
 
       {/* Modal */}
-      {showModal && <NewMaintenanceModal onClose={() => setShowModal(false)} />}
+      {showModal && (
+        <NewMaintenanceModal
+          overdueAssets={overdueAssets}
+          onClose={() => setShowModal(false)}
+          onSave={handleCreateMaintenance}
+        />
+      )}
     </div>
   )
 }
 
-function NewMaintenanceModal({ onClose }: { onClose: () => void }) {
+type NewMaintenanceModalProps = {
+  overdueAssets: Asset[]
+  onClose: () => void
+  onSave: (record: MaintenanceRecord) => void
+}
+
+function NewMaintenanceModal({ overdueAssets, onClose, onSave }: NewMaintenanceModalProps) {
+  const fallbackAssets = overdueAssets.length > 0 ? overdueAssets : ASSETS
+  const [selectedAssetId, setSelectedAssetId] = useState(fallbackAssets[0]?.id ?? '')
+  const [type, setType] = useState<MaintenanceRecord['type']>('preventive')
+  const [scheduledDate, setScheduledDate] = useState(new Date().toISOString().slice(0, 10))
+  const [description, setDescription] = useState('')
+  const [responsible, setResponsible] = useState(fallbackAssets[0]?.responsible ?? '')
+  const [cost, setCost] = useState('')
+  const [provider, setProvider] = useState('')
+
+  const selectedAsset = fallbackAssets.find(asset => asset.id === selectedAssetId) ?? fallbackAssets[0]
+
+  const handleAssetChange = (assetId: string) => {
+    setSelectedAssetId(assetId)
+    const nextAsset = fallbackAssets.find(asset => asset.id === assetId)
+    if (nextAsset) {
+      setResponsible(nextAsset.responsible)
+      if (!description) {
+        setDescription(`Regularização de manutenção pendente para ${nextAsset.name}`)
+      }
+    }
+  }
+
+  const handleSubmit = () => {
+    if (!selectedAsset) {
+      toast.error('Nenhum ativo disponível para manutenção')
+      return
+    }
+
+    if (!description.trim() || !responsible.trim() || !scheduledDate) {
+      toast.error('Preencha os campos obrigatórios', {
+        description: 'Ativo, data, descrição e responsável são obrigatórios.',
+      })
+      return
+    }
+
+    const targetDate = new Date(`${scheduledDate}T00:00:00`)
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    const daysUntil = Math.ceil((targetDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
+
+    const record: MaintenanceRecord = {
+      id: `m-${Date.now()}`,
+      assetId: selectedAsset.id,
+      assetName: selectedAsset.name,
+      assetCode: selectedAsset.code,
+      type,
+      description: description.trim(),
+      scheduledDate,
+      responsible: responsible.trim(),
+      status: daysUntil < 0 ? 'overdue' : 'scheduled',
+      provider: provider.trim() || undefined,
+      cost: cost.trim() ? Number(cost) : undefined,
+      daysUntil,
+    }
+
+    onSave(record)
+  }
+
   return (
     <div
       style={{
@@ -203,47 +296,55 @@ function NewMaintenanceModal({ onClose }: { onClose: () => void }) {
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           <ModalField label="Ativo">
-            <select style={selectStyle}>
-              <option>VEI-001 — Caminhão Mercedes Atego</option>
-              <option>VEI-002 — Van Fiorino Cargo</option>
-              <option>FER-001 — Guindaste Manual 3T</option>
+            <select
+              style={selectStyle}
+              value={selectedAssetId}
+              onChange={e => handleAssetChange(e.target.value)}
+            >
+              {fallbackAssets.map(asset => (
+                <option key={asset.id} value={asset.id}>
+                  {asset.code} — {asset.name}
+                </option>
+              ))}
             </select>
           </ModalField>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
             <ModalField label="Tipo">
-              <select style={selectStyle}>
-                <option>Preventiva</option>
-                <option>Corretiva</option>
-                <option>Inspeção</option>
-                <option>Calibração</option>
+              <select style={selectStyle} value={type} onChange={e => setType(e.target.value as MaintenanceRecord['type'])}>
+                <option value="preventive">Preventiva</option>
+                <option value="corrective">Corretiva</option>
+                <option value="inspection">Inspeção</option>
+                <option value="calibration">Calibração</option>
               </select>
             </ModalField>
             <ModalField label="Data programada">
-              <input type="date" style={inputStyle} defaultValue="2025-08-15" />
+              <input type="date" style={inputStyle} value={scheduledDate} onChange={e => setScheduledDate(e.target.value)} />
             </ModalField>
           </div>
           <ModalField label="Descrição">
             <textarea
               rows={3}
               placeholder="Descreva a manutenção a ser realizada…"
+              value={description}
+              onChange={e => setDescription(e.target.value)}
               style={{ ...inputStyle, resize: 'none', fontFamily: 'inherit' }}
             />
           </ModalField>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
             <ModalField label="Responsável">
-              <input style={inputStyle} placeholder="Nome do responsável" />
+              <input style={inputStyle} placeholder="Nome do responsável" value={responsible} onChange={e => setResponsible(e.target.value)} />
             </ModalField>
             <ModalField label="Custo previsto (R$)">
-              <input type="number" style={inputStyle} placeholder="0,00" />
+              <input type="number" style={inputStyle} placeholder="0,00" value={cost} onChange={e => setCost(e.target.value)} />
             </ModalField>
           </div>
           <ModalField label="Fornecedor / Oficina">
-            <input style={inputStyle} placeholder="Nome do fornecedor (opcional)" />
+            <input style={inputStyle} placeholder="Nome do fornecedor (opcional)" value={provider} onChange={e => setProvider(e.target.value)} />
           </ModalField>
         </div>
         <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 20 }}>
           <button className="btn btn-ghost" onClick={onClose}>Cancelar</button>
-          <button className="btn btn-primary" onClick={onClose}>Salvar Manutenção</button>
+          <button className="btn btn-primary" onClick={handleSubmit}>Salvar Manutenção</button>
         </div>
       </div>
     </div>
