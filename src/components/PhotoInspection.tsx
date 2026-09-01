@@ -1,7 +1,23 @@
-import { useState, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { toast } from 'sonner'
+import { jsPDF } from 'jspdf'
 import { INSPECTIONS, type InspectionReport } from '../data/mockData'
 
 type AIState = 'idle' | 'uploading' | 'analyzing' | 'done'
+
+type ApiAsset = { id: number; code: string; name: string; responsible: string }
+
+const INSPECTIONS_API = 'http://localhost:8000/api/inspections'
+const ASSETS_API = 'http://localhost:8000/api/assets'
+
+function normalizeInspection(item: InspectionReport & { aiFindings: string | string[]; id: string | number; assetId: string | number }): InspectionReport {
+  return {
+    ...item,
+    id: String(item.id),
+    assetId: String(item.assetId),
+    aiFindings: Array.isArray(item.aiFindings) ? item.aiFindings : (item.aiFindings || '').split('\n').filter(Boolean),
+  }
+}
 
 const MOCK_ANALYSIS: Omit<InspectionReport, 'id' | 'assetId' | 'assetName' | 'assetCode' | 'date' | 'inspector' | 'imageUrl'> = {
   aiScore: 76,
@@ -19,13 +35,38 @@ const MOCK_ANALYSIS: Omit<InspectionReport, 'id' | 'assetId' | 'assetName' | 'as
 
 export default function PhotoInspection() {
   const [selected, setSelected] = useState<InspectionReport | null>(null)
+  const [inspections, setInspections] = useState<InspectionReport[]>(INSPECTIONS)
+  const [assets, setAssets] = useState<ApiAsset[]>([])
   const [aiState, setAiState] = useState<AIState>('idle')
   const [preview, setPreview] = useState<string | null>(null)
   const [result, setResult] = useState<typeof MOCK_ANALYSIS | null>(null)
-  const [selectedAsset, setSelectedAsset] = useState('VEI-001 — Caminhão Mercedes Atego')
+  const [selectedAsset, setSelectedAsset] = useState('')
+  const [inspector, setInspector] = useState('Roberto Alves')
+  const [saving, setSaving] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
 
+  useEffect(() => {
+    Promise.all([fetch(INSPECTIONS_API), fetch(ASSETS_API)])
+      .then(async ([inspectionResponse, assetResponse]) => {
+        if (!inspectionResponse.ok || !assetResponse.ok) throw new Error('A API não respondeu ao carregar os dados.')
+        const [inspectionData, assetData] = await Promise.all([inspectionResponse.json(), assetResponse.json()])
+        setInspections((inspectionData as Array<InspectionReport & { aiFindings: string | string[]; id: string | number; assetId: string | number }>).map(normalizeInspection))
+        const loadedAssets = assetData as ApiAsset[]
+        setAssets(loadedAssets)
+        setSelectedAsset(current => current || String(loadedAssets[0]?.id || ''))
+      })
+      .catch(error => toast.error('Falha ao carregar inspeções', { description: error instanceof Error ? error.message : 'Erro inesperado.' }))
+  }, [])
+
   const handleFile = (file: File) => {
+    if (!file.type.startsWith('image/')) {
+      toast.error('Arquivo inválido', { description: 'Selecione uma imagem JPG, PNG ou WEBP.' })
+      return
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      toast.error('Imagem muito grande', { description: 'O tamanho máximo permitido é 10 MB.' })
+      return
+    }
     const reader = new FileReader()
     reader.onload = e => {
       setPreview(e.target?.result as string)
@@ -57,6 +98,76 @@ export default function PhotoInspection() {
     runAnalysis()
   }
 
+  const saveInspection = async (approved: boolean) => {
+    const asset = assets.find(item => String(item.id) === selectedAsset)
+    if (!asset) {
+      toast.error('Selecione um ativo válido')
+      return
+    }
+    if (!inspector.trim()) {
+      toast.error('Inspetor obrigatório', { description: 'Informe o responsável pela inspeção.' })
+      return
+    }
+    if (!result || !preview) {
+      toast.error('Análise pendente', { description: 'Selecione uma imagem e aguarde o resultado da análise.' })
+      return
+    }
+
+    setSaving(true)
+    try {
+      const response = await fetch(INSPECTIONS_API, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          assetId: asset.id,
+          assetName: asset.name,
+          assetCode: asset.code,
+          date: new Date().toISOString().slice(0, 10),
+          inspector: inspector.trim(),
+          imageUrl: preview,
+          aiScore: result.aiScore,
+          aiFindings: result.aiFindings.join('\n'),
+          aiStatus: result.aiStatus,
+          approved,
+        }),
+      })
+      if (!response.ok) throw new Error(`A API respondeu com HTTP ${response.status}.`)
+      const saved = normalizeInspection(await response.json())
+      setInspections(current => [saved, ...current])
+      setSelected(saved)
+      toast.success(approved ? 'Inspeção aprovada e salva' : 'Revisão manual registrada', { description: `${saved.assetCode} foi salvo no banco de dados.` })
+    } catch (error) {
+      toast.error('Falha ao salvar inspeção', { description: error instanceof Error ? error.message : 'Erro inesperado.' })
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const downloadInspectionPdf = () => {
+    if (!result) {
+      toast.error('Análise pendente', { description: 'Aguarde a análise da imagem antes de gerar o PDF.' })
+      return
+    }
+
+    const asset = assets.find(item => String(item.id) === selectedAsset)
+    const document = new jsPDF()
+    document.setFontSize(18)
+    document.text('FLEETGUARD - Relatório de Inspeção', 20, 22)
+    document.setFontSize(11)
+    document.text(`Ativo: ${asset?.code ?? 'Não selecionado'} - ${asset?.name ?? ''}`, 20, 35)
+    document.text(`Inspetor: ${inspector || 'Não informado'}`, 20, 43)
+    document.text(`Resultado: ${result.aiScore}/100 - ${result.aiStatus}`, 20, 51)
+    document.setFontSize(13)
+    document.text('Observações detectadas', 20, 66)
+    document.setFontSize(10)
+    result.aiFindings.forEach((finding, index) => {
+      const lines = document.splitTextToSize(`${index + 1}. ${finding}`, 170)
+      document.text(lines, 20, 76 + index * 14)
+    })
+    document.save(`inspecao-${asset?.code ?? 'ativo'}-${new Date().toISOString().slice(0, 10)}.pdf`)
+    toast.success('PDF da inspeção baixado')
+  }
+
   const scoreColor = (score: number) =>
     score >= 85 ? 'var(--status-ok)' : score >= 65 ? 'var(--status-warning)' : 'var(--status-critical)'
 
@@ -68,7 +179,7 @@ export default function PhotoInspection() {
           <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--border)' }}>
             <span className="font-mono" style={{ fontSize: 11, color: 'var(--muted-foreground)', letterSpacing: '0.08em' }}>HISTÓRICO DE INSPEÇÕES</span>
           </div>
-          {INSPECTIONS.map(ins => (
+          {inspections.map(ins => (
             <div
               key={ins.id}
               onClick={() => setSelected(selected?.id === ins.id ? null : ins)}
@@ -109,21 +220,21 @@ export default function PhotoInspection() {
             <div>
               <label style={{ display: 'block', fontSize: 11, color: 'var(--muted-foreground)', marginBottom: 5 }}>Ativo</label>
               <select
+                required
                 value={selectedAsset}
                 onChange={e => setSelectedAsset(e.target.value)}
                 style={{ width: '100%', background: 'var(--secondary)', border: '1px solid var(--border)', borderRadius: 3, padding: '7px 10px', color: 'var(--foreground)', fontSize: 13, outline: 'none', appearance: 'none' }}
               >
-                <option>VEI-001 — Caminhão Mercedes Atego</option>
-                <option>VEI-002 — Van Fiorino Cargo</option>
-                <option>VEI-003 — Caminhonete Hilux</option>
-                <option>FER-001 — Guindaste Manual 3T</option>
-                <option>EQP-001 — Compressor de Ar Industrial</option>
+                {assets.map(asset => <option key={asset.id} value={asset.id}>{asset.code} — {asset.name}</option>)}
               </select>
             </div>
             <div>
               <label style={{ display: 'block', fontSize: 11, color: 'var(--muted-foreground)', marginBottom: 5 }}>Inspetor</label>
               <input
-                defaultValue="Roberto Alves"
+                required
+                value={inspector}
+                onChange={event => setInspector(event.target.value)}
+                title="Informe quem realizou a inspeção."
                 style={{ width: '100%', background: 'var(--secondary)', border: '1px solid var(--border)', borderRadius: 3, padding: '7px 10px', color: 'var(--foreground)', fontSize: 13, outline: 'none' }}
               />
             </div>
@@ -189,6 +300,7 @@ export default function PhotoInspection() {
             <input
               ref={inputRef}
               type="file"
+              required
               accept="image/*"
               style={{ display: 'none' }}
               onChange={e => { const f = e.target.files?.[0]; if (f) handleFile(f) }}
@@ -238,9 +350,9 @@ export default function PhotoInspection() {
                 ))}
               </div>
               <div style={{ display: 'flex', gap: 8, marginTop: 20 }}>
-                <button className="btn btn-primary">Aprovar e Salvar</button>
-                <button className="btn btn-ghost">Solicitar revisão manual</button>
-                <button className="btn btn-ghost" style={{ marginLeft: 'auto' }}>Gerar PDF</button>
+                <button className="btn btn-primary" onClick={() => void saveInspection(true)} disabled={saving}>{saving ? 'Salvando…' : 'Aprovar e Salvar'}</button>
+                <button className="btn btn-ghost" onClick={() => void saveInspection(false)} disabled={saving}>Solicitar revisão manual</button>
+                <button className="btn btn-ghost" style={{ marginLeft: 'auto' }} onClick={downloadInspectionPdf}>Gerar PDF</button>
               </div>
             </div>
           </div>

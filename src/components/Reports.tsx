@@ -1,4 +1,6 @@
 import { useState } from 'react'
+import { toast } from 'sonner'
+import { jsPDF } from 'jspdf'
 import { ASSETS, MAINTENANCES } from '../data/mockData'
 
 type Period = 'daily' | 'weekly' | 'monthly'
@@ -33,6 +35,19 @@ const PERIOD_LABELS: Record<Period, string> = {
   monthly: 'Mensal',
 }
 
+async function getApiError(response: Response): Promise<string> {
+  try {
+    const payload: unknown = await response.json()
+    if (typeof payload === 'object' && payload !== null && 'detail' in payload) {
+      return String(payload.detail)
+    }
+  } catch {
+    // Falls back to the response status below.
+  }
+
+  return `A API respondeu com HTTP ${response.status} (${response.statusText}).`
+}
+
 export default function Reports() {
   const [activeTab, setActiveTab] = useState<'generate' | 'schedule'>('generate')
   const [reportType, setReportType] = useState<ReportType>('full')
@@ -40,19 +55,98 @@ export default function Reports() {
   const [generating, setGenerating] = useState(false)
   const [generated, setGenerated] = useState(false)
   const [schedules, setSchedules] = useState(SCHEDULED)
+  const [startDate, setStartDate] = useState('2025-07-01')
+  const [endDate, setEndDate] = useState('2025-08-04')
+  const [recipient, setRecipient] = useState('')
 
   const overdue = ASSETS.filter(a => a.status === 'overdue' || a.status === 'critical').length
   const overdueMaints = MAINTENANCES.filter(m => m.status === 'overdue').length
   const totalCost = MAINTENANCES.filter(m => m.cost).reduce((acc, m) => acc + (m.cost || 0), 0)
 
-  const handleGenerate = () => {
+  const handleGenerate = async () => {
+    if (!startDate || !endDate || endDate < startDate) {
+      toast.error('Intervalo de datas inválido', {
+        description: 'A data final deve ser igual ou posterior à data inicial.',
+      })
+      return
+    }
+
+    if (recipient && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(recipient)) {
+      toast.error('E-mail do destinatário inválido', {
+        description: 'Informe um endereço no formato nome@empresa.com.',
+      })
+      return
+    }
+
     setGenerating(true)
     setGenerated(false)
-    setTimeout(() => { setGenerating(false); setGenerated(true) }, 1800)
+    try {
+      const response = await fetch('http://localhost:8000/api/reports', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: reportType,
+          period,
+          recipients: recipient ? [recipient] : [],
+          generatedAt: new Date().toISOString().slice(0, 10),
+        }),
+      })
+
+      if (!response.ok) {
+        throw new Error(await getApiError(response))
+      }
+
+      const result = await response.json() as { emailSent: boolean; message: string }
+      setGenerated(true)
+      toast[result.emailSent ? 'success' : recipient ? 'info' : 'success'](
+        result.emailSent ? 'Relatório enviado por e-mail' : recipient ? 'E-mail de teste capturado' : 'Relatório gerado',
+        {
+        description: result.message,
+        },
+      )
+    } catch (error) {
+      toast.error('Falha ao gerar ou enviar relatório', {
+        description: error instanceof Error ? error.message : 'Erro inesperado ao processar relatório.',
+      })
+    } finally {
+      setGenerating(false)
+    }
   }
 
   const toggleSchedule = (id: string) => {
     setSchedules(s => s.map(r => r.id === id ? { ...r, active: !r.active } : r))
+  }
+
+  const sendScheduledReport = (schedule: ScheduledReport) => {
+    setReportType(schedule.type)
+    setPeriod(schedule.period)
+    setRecipient(schedule.recipients[0] ?? '')
+    setActiveTab('generate')
+    toast.info('Agendamento carregado', { description: 'Revise os dados e confirme o envio do relatório.' })
+  }
+
+  const handleDownloadPdf = () => {
+    if (!generated) {
+      toast.error('Gere o relatório antes de baixar o PDF')
+      return
+    }
+
+    const document = new jsPDF()
+    document.setFontSize(18)
+    document.text('FLEETGUARD - Relatório de Frota', 20, 22)
+    document.setFontSize(11)
+    document.text(`Tipo: ${TYPE_LABELS[reportType]}`, 20, 34)
+    document.text(`Período: ${startDate} a ${endDate}`, 20, 42)
+    document.text(`Gerado em: ${new Date().toLocaleDateString('pt-BR')}`, 20, 50)
+    document.setFontSize(13)
+    document.text('Resumo operacional', 20, 65)
+    document.setFontSize(11)
+    document.text(`Total de ativos: ${ASSETS.length}`, 20, 75)
+    document.text(`Ativos críticos ou vencidos: ${overdue}`, 20, 83)
+    document.text(`Manutenções vencidas: ${overdueMaints}`, 20, 91)
+    document.text(`Custo previsto: R$ ${totalCost.toLocaleString('pt-BR')}`, 20, 99)
+    document.save(`relatorio-fleetguard-${new Date().toISOString().slice(0, 10)}.pdf`)
+    toast.success('PDF baixado', { description: 'O relatório foi salvo no seu dispositivo.' })
   }
 
   return (
@@ -131,14 +225,20 @@ export default function Reports() {
             <div>
               <label style={{ display: 'block', fontSize: 11, color: 'var(--muted-foreground)', marginBottom: 6 }}>Intervalo de datas</label>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-                <input type="date" defaultValue="2025-07-01" style={inputSt} />
-                <input type="date" defaultValue="2025-08-04" style={inputSt} />
+                <input required type="date" value={startDate} onChange={event => setStartDate(event.target.value)} style={inputSt} />
+                <input required type="date" value={endDate} onChange={event => setEndDate(event.target.value)} style={inputSt} />
               </div>
             </div>
 
             <div>
               <label style={{ display: 'block', fontSize: 11, color: 'var(--muted-foreground)', marginBottom: 6 }}>Enviar por e-mail (opcional)</label>
-              <input placeholder="email@empresa.com" style={inputSt} />
+              <input
+                type="email"
+                placeholder="email@empresa.com"
+                value={recipient}
+                onChange={event => setRecipient(event.target.value)}
+                style={inputSt}
+              />
             </div>
 
             <button
@@ -147,7 +247,7 @@ export default function Reports() {
               onClick={handleGenerate}
               disabled={generating}
             >
-              {generating ? 'Gerando PDF…' : 'Gerar Relatório PDF'}
+              {generating ? 'Processando relatório…' : recipient ? 'Gerar e enviar relatório' : 'Gerar Relatório PDF'}
             </button>
           </div>
 
@@ -158,8 +258,8 @@ export default function Reports() {
                 <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <span className="font-mono" style={{ fontSize: 11, color: 'var(--muted-foreground)', letterSpacing: '0.08em' }}>PRÉVIA DO RELATÓRIO</span>
                   <div style={{ display: 'flex', gap: 8 }}>
-                    <button className="btn btn-secondary" style={{ fontSize: 12 }}>⬇ Download PDF</button>
-                    <button className="btn btn-primary" style={{ fontSize: 12 }}>✉ Enviar por e-mail</button>
+                    <button className="btn btn-secondary" style={{ fontSize: 12 }} onClick={handleDownloadPdf}>⬇ Download PDF</button>
+                    <button className="btn btn-primary" style={{ fontSize: 12 }} onClick={handleGenerate} disabled={generating}>✉ Enviar por e-mail</button>
                   </div>
                 </div>
                 <div style={{ padding: 24 }}>
@@ -242,7 +342,7 @@ export default function Reports() {
             <p style={{ fontSize: 13, color: 'var(--muted-foreground)' }}>
               Relatórios enviados automaticamente por e-mail conforme periodicidade configurada.
             </p>
-            <button className="btn btn-primary">+ Novo Agendamento</button>
+            <button className="btn btn-primary" onClick={() => toast.info('Configure o relatório e gere o envio para criar um agendamento.')}>+ Novo Agendamento</button>
           </div>
 
           <div style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 4, overflow: 'hidden' }}>
@@ -299,11 +399,14 @@ export default function Reports() {
                         <button
                           className="btn btn-ghost"
                           style={{ padding: '4px 10px', fontSize: 11 }}
-                          onClick={() => toggleSchedule(s.id)}
+                          onClick={() => {
+                            toggleSchedule(s.id)
+                            toast.success(s.active ? 'Agendamento pausado' : 'Agendamento ativado')
+                          }}
                         >
                           {s.active ? 'Pausar' : 'Ativar'}
                         </button>
-                        <button className="btn btn-ghost" style={{ padding: '4px 10px', fontSize: 11 }}>
+                        <button className="btn btn-ghost" style={{ padding: '4px 10px', fontSize: 11 }} onClick={() => sendScheduledReport(s)}>
                           ✉ Enviar agora
                         </button>
                       </div>

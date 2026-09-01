@@ -1,23 +1,40 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import Dashboard from './components/Dashboard'
 import Assets from './components/Assets'
 import Maintenance from './components/Maintenance'
 import PhotoInspection from './components/PhotoInspection'
+import Parts from './components/Parts'
 import Reports from './components/Reports'
 
-type Page = 'dashboard' | 'assets' | 'maintenance' | 'inspection' | 'reports'
+type Page = 'dashboard' | 'assets' | 'maintenance' | 'parts' | 'inspection' | 'reports'
 
 const NAV = [
   { id: 'dashboard' as Page, icon: GridIcon, label: 'Dashboard' },
   { id: 'assets' as Page, icon: TruckIcon, label: 'Ativos' },
   { id: 'maintenance' as Page, icon: WrenchIcon, label: 'Manutenções' },
+  { id: 'parts' as Page, icon: BoxIcon, label: 'Peças e Insumos' },
   { id: 'inspection' as Page, icon: CameraIcon, label: 'Inspeção por Foto' },
   { id: 'reports' as Page, icon: FileIcon, label: 'Relatórios' },
 ]
 
+function pageFromHash(): Page {
+  const page = window.location.hash.replace(/^#\/?/, '')
+  return NAV.some(item => item.id === page) ? page as Page : 'dashboard'
+}
+
 export default function App() {
-  const [page, setPage] = useState<Page>('dashboard')
+  const [page, setPage] = useState<Page>(pageFromHash)
   const [sidebarOpen, setSidebarOpen] = useState(true)
+
+  useEffect(() => {
+    const handleHashChange = () => setPage(pageFromHash())
+    window.addEventListener('hashchange', handleHashChange)
+    return () => window.removeEventListener('hashchange', handleHashChange)
+  }, [])
+
+  const navigate = (nextPage: Page) => {
+    window.location.hash = nextPage
+  }
 
   return (
     <div className="flex h-screen overflow-hidden" style={{ background: 'var(--background)' }}>
@@ -76,7 +93,7 @@ export default function App() {
           {NAV.map(({ id, icon: Icon, label }) => (
             <button
               key={id}
-              onClick={() => setPage(id)}
+              onClick={() => navigate(id)}
               className={`nav-item ${page === id ? 'active' : ''}`}
               style={{ justifyContent: sidebarOpen ? 'flex-start' : 'center' }}
               title={!sidebarOpen ? label : undefined}
@@ -148,9 +165,10 @@ export default function App() {
 
         {/* Page content */}
         <main style={{ flex: 1, overflow: 'auto', padding: 24 }}>
-          {page === 'dashboard' && <Dashboard onNavigate={setPage} />}
+          {page === 'dashboard' && <Dashboard onNavigate={navigate} />}
           {page === 'assets' && <Assets />}
           {page === 'maintenance' && <Maintenance />}
+          {page === 'parts' && <Parts />}
           {page === 'inspection' && <PhotoInspection />}
           {page === 'reports' && <Reports />}
         </main>
@@ -196,6 +214,9 @@ function WrenchIcon({ size = 16 }: { size?: number }) {
       <path d="M10.5 1a3.5 3.5 0 0 0-3.3 4.7L1.5 11.5a1.5 1.5 0 1 0 2.1 2.1l5.8-5.7A3.5 3.5 0 0 0 10.5 1z" />
     </svg>
   )
+}
+function BoxIcon({ size = 16 }: { size?: number }) {
+  return <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth={1.5}><path d="M2 5.5L8 2l6 3.5v7L8 16l-6-3.5v-7z" /><path d="M2 5.5L8 9l6-3.5M8 9v7" /></svg>
 }
 function CameraIcon({ size = 16 }: { size?: number }) {
   return (

@@ -1,11 +1,12 @@
 # Sistema de Automação de Manutenção de Frotas e Ferramentas
 
 ## Integrantes do Grupo
-* Gustavo Vieira
-* Yasmin Vier Scotti
-* Alessandro Zientara
-* Abel Felipe
-* Pedro Neto
+
+- Gustavo Vieira
+- Yasmin Vier Scotti
+- Alessandro Zientara
+- Abel Felipe
+- Pedro Neto
 
 ## Resumo da Automação Proposta
 
@@ -19,39 +20,40 @@ físicos), o que gera risco de descumprimento de prazos, perda de documentação
 apontar responsáveis.
 
 Este projeto propõe um sistema automatizado capaz de:
-* Monitorar o estado de manutenção de veículos e ferramentas;
-* Controlar prazos, responsáveis e histórico de intervenções;
-* Identificar equipamentos com manutenção vencida, próxima do vencimento ou com pendências;
-* Permitir que o responsável tire uma foto do veículo/ferramenta no momento da conferência, para
+
+- Monitorar o estado de manutenção de veículos e ferramentas;
+- Controlar prazos, responsáveis e histórico de intervenções;
+- Identificar equipamentos com manutenção vencida, próxima do vencimento ou com pendências;
+- Permitir que o responsável tire uma foto do veículo/ferramenta no momento da conferência, para
   que uma Inteligência Artificial analise a imagem e faça uma checagem automática das condições
   do equipamento, apontando possíveis avarias, desgastes ou irregularidades visuais;
-* Gerar relatórios periódicos em PDF, consolidando o status de cada ativo (incluindo o resultado
+- Gerar relatórios periódicos em PDF, consolidando o status de cada ativo (incluindo o resultado
   da checagem por foto);
-* Enviar automaticamente esses relatórios por e-mail aos responsáveis, com periodicidade
+- Enviar automaticamente esses relatórios por e-mail aos responsáveis, com periodicidade
   definida (diária, semanal ou mensal), garantindo rastreabilidade e conformidade contínua com
   as exigências regulatórias.
 
 ### Funcionalidades Previstas
-* CRUD de veículos e ferramentas;
-* CRUD de peças e insumos vinculados a cada equipamento;
-* Controle de datas de manutenção (última, próxima, vencida);
-* Alertas automáticos de vencimento;
-* Captura de foto do veículo/ferramenta via aplicativo/painel para conferência;
-* Checagem automática das condições do equipamento por Inteligência Artificial (análise de
+
+- CRUD de veículos e ferramentas;
+- CRUD de peças e insumos vinculados a cada equipamento;
+- Controle de datas de manutenção (última, próxima, vencida);
+- Alertas automáticos de vencimento;
+- Captura de foto do veículo/ferramenta via aplicativo/painel para conferência;
+- Checagem automática das condições do equipamento por Inteligência Artificial (análise de
   imagem, identificando avarias, desgastes ou irregularidades visuais);
-* Geração de relatórios em PDF, incluindo o resultado da checagem por IA;
-* Envio automático de relatórios por e-mail;
-* Painel de status geral da frota/ferramentas.
+- Geração de relatórios em PDF, incluindo o resultado da checagem por IA;
+- Envio automático de relatórios por e-mail;
+- Painel de status geral da frota/ferramentas.
 
 ## Tecnologias e Ferramentas Utilizadas
-* **TypeScript** — linguagem principal do projeto;
-* **React** — front-end, painel de gestão dos ativos;
-* **NestJS** — back-end e regras de negócio;
-* **PostgreSQL** — banco de dados relacional para cadastro de ativos, peças e histórico;
-* **Biblioteca de geração de PDF** *(ex: Puppeteer, PDFKit ou similar — definir a escolhida)*;
-* **Serviço de envio de e-mail** *(ex: Nodemailer + SMTP, SendGrid ou similar — definir o escolhido)*;
-* **Serviço de IA para análise de imagem** *(ex: API de visão computacional para checagem
-  automática das fotos de veículos e ferramentas — definir o serviço/modelo escolhido)*.
+
+- **TypeScript e React** — painel de gestão dos ativos;
+- **Python e FastAPI** — back-end e regras de negócio;
+- **SQLite e SQLAlchemy** — banco de dados local para ativos, manutenções, inspeções e relatórios;
+- **jsPDF** — geração de relatórios PDF para download;
+- **SMTP** — serviço de envio de e-mail, configurável por variáveis de ambiente;
+- **Mailpit** — caixa de e-mail local para demonstração sem credenciais externas.
 
 ## Instruções de Instalação, Dependências e Execução
 
@@ -59,49 +61,74 @@ Este projeto propõe um sistema automatizado capaz de:
 > back-end estiverem em pastas separadas `/frontend` e `/backend`).
 
 ### Pré-requisitos
-* [Node.js](https://nodejs.org/) (versão 18 ou superior recomendada)
-* [PostgreSQL](https://www.postgresql.org/) instalado e em execução
-* npm ou yarn
+
+- [Node.js](https://nodejs.org/) 18 ou superior;
+- Python 3.12;
+- npm;
+- Docker Desktop, somente para demonstrar e-mails no Mailpit.
 
 ### Clonando o repositório
+
 ```bash
 git clone <URL_DO_REPOSITORIO>
 cd <NOME_DO_REPOSITORIO>
 ```
 
-### Configuração do Back-end (NestJS)
+### Configuração do Back-end (FastAPI)
+
 ```bash
-cd backend
-npm install
+py -3.12 -m pip install -r backend/requirements.txt
+npm run dev:backend
 ```
 
-Crie um arquivo `.env` na raiz do back-end com as variáveis de ambiente necessárias, por exemplo:
+O banco `truck_check.db` é criado automaticamente na raiz do projeto e recebe dados iniciais
+na primeira inicialização. A API fica disponível em `http://localhost:8000` e a documentação
+interativa fica em `http://localhost:8000/docs`.
+
+Para e-mail externo, crie `backend/.env` a partir de `backend/.env.example` e informe os dados
+do seu servidor SMTP:
+
 ```env
-DATABASE_URL=postgresql://usuario:senha@localhost:5432/nome_do_banco
-EMAIL_SERVICE_API_KEY=sua_chave_aqui
+SMTP_HOST=smtp.seu-provedor.com
+SMTP_PORT=587
+SMTP_USERNAME=seu_usuario
+SMTP_PASSWORD=sua_senha_de_aplicativo
+SMTP_FROM=seu_email@empresa.com
+SMTP_USE_TLS=true
 ```
 
-Execute as migrações do banco de dados (se aplicável):
+Para a demonstração local de e-mail:
+
 ```bash
-npm run migration:run
+docker compose up -d mailpit
 ```
 
-Inicie o servidor back-end:
-```bash
-npm run start:dev
-```
+Os e-mails de teste podem ser consultados em `http://localhost:8025`.
 
 ### Configuração do Front-end (React)
+
 ```bash
-cd frontend
 npm install
 npm run dev
 ```
 
-### Status Atual do Projeto
-Este projeto encontra-se em fase de planejamento e definição de requisitos. As próximas etapas
-incluem a modelagem do banco de dados, implementação do CRUD de ativos e da lógica de
-monitoramento de prazos de manutenção.
+O painel fica disponível em `http://localhost:5173`.
+
+### Funcionalidades Implementadas
+
+- Cadastro, edição, listagem e exclusão de veículos;
+- Cadastro, edição, listagem e exclusão de manutenções;
+- Registro persistido de inspeções por foto e resultado de análise;
+- Dashboard com dados carregados da API e do banco local;
+- Relatórios persistidos, geração de PDF e entrega por SMTP configurado;
+- Validações de dados, mensagens de erro da API, máscaras de placa e valor, além de dicas de contexto;
+- Preservação da página atual após atualizar o navegador.
+
+### Limites de Ambiente
+
+A análise de inspeção usa um resultado demonstrativo e determinístico. O envio de e-mail externo
+depende de credenciais SMTP válidas; sem elas, o Mailpit permite demonstrar o fluxo localmente.
 
 ## Fluxograma do Sistema
-*(inserir imagem ou link do fluxograma do sistema aqui)*
+
+_(inserir imagem ou link do fluxograma do sistema aqui)_

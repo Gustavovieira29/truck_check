@@ -2,7 +2,32 @@ import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import { ASSETS, MAINTENANCES, type Asset, type MaintenanceRecord } from '../data/mockData'
 
-const API_URL = 'http://localhost:3001/maintenances'
+const API_URL = 'http://localhost:8000/api/maintenance'
+
+async function getApiError(response: Response): Promise<string> {
+  try {
+    const payload: unknown = await response.json()
+    if (typeof payload === 'object' && payload !== null && 'detail' in payload) {
+      const detail = payload.detail
+      if (typeof detail === 'string') return detail
+      if (Array.isArray(detail)) {
+        return detail
+          .map(item => {
+            if (typeof item === 'object' && item !== null && 'msg' in item) {
+              const field = Array.isArray(item.loc) ? item.loc.at(-1) : 'campo'
+              return `${String(field)}: ${String(item.msg)}`
+            }
+            return String(item)
+          })
+          .join(' | ')
+      }
+    }
+  } catch {
+    // Uses the HTTP status below when the response does not contain JSON.
+  }
+
+  return `A API respondeu com HTTP ${response.status} (${response.statusText}).`
+}
 
 const STATUS_MAP: Record<MaintenanceRecord['status'], { label: string; badge: string }> = {
   scheduled: { label: 'Agendado', badge: 'badge-inactive' },
@@ -23,6 +48,7 @@ export default function Maintenance() {
   const [statusFilter, setStatusFilter] = useState<MaintenanceRecord['status'] | 'all'>('all')
   const [showModal, setShowModal] = useState(false)
   const [maintenances, setMaintenances] = useState(MAINTENANCES)
+  const [assets, setAssets] = useState<Asset[]>(ASSETS)
   const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
@@ -30,18 +56,22 @@ export default function Maintenance() {
 
     async function loadMaintenances() {
       try {
-        const response = await fetch(API_URL)
-        if (!response.ok) {
-          throw new Error('Falha ao carregar manutenções')
+        const [response, assetsResponse] = await Promise.all([
+          fetch(API_URL),
+          fetch('http://localhost:8000/api/assets'),
+        ])
+        if (!response.ok || !assetsResponse.ok) {
+          throw new Error(!response.ok ? await getApiError(response) : await getApiError(assetsResponse))
         }
 
-        const data = await response.json() as MaintenanceRecord[]
+        const [data, assetData] = await Promise.all([response.json(), assetsResponse.json()]) as [MaintenanceRecord[], Asset[]]
         if (isMounted) {
           setMaintenances(data)
+          setAssets(assetData)
         }
-      } catch {
+      } catch (error) {
         toast.error('Não foi possível carregar da API', {
-          description: 'Usando dados locais temporariamente. Inicie o json-server para persistência.',
+          description: error instanceof Error ? error.message : 'Erro inesperado ao carregar manutenções.',
         })
       } finally {
         if (isMounted) {
@@ -71,8 +101,6 @@ export default function Maintenance() {
     .filter(m => m.cost && m.status !== 'cancelled')
     .reduce((acc, m) => acc + (m.cost || 0), 0)
 
-  const overdueAssets = ASSETS.filter(asset => asset.daysUntilMaintenance < 0)
-
   const handleCreateMaintenance = async (record: MaintenanceRecord) => {
     try {
       const response = await fetch(API_URL, {
@@ -80,11 +108,14 @@ export default function Maintenance() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(record),
+        body: JSON.stringify({
+          ...record,
+          assetId: Number.parseInt(String(record.assetId).replace(/\D/g, ''), 10),
+        }),
       })
 
       if (!response.ok) {
-        throw new Error('Falha ao salvar manutenção')
+        throw new Error(await getApiError(response))
       }
 
       const savedRecord = await response.json() as MaintenanceRecord
@@ -104,9 +135,9 @@ export default function Maintenance() {
           description: `${savedRecord.description.slice(0, 48)}${savedRecord.description.length > 48 ? '...' : ''}`,
         })
       }
-    } catch {
+    } catch (error) {
       toast.error('Falha ao salvar manutenção', {
-        description: 'Verifique se o json-server está rodando em localhost:3001.',
+        description: error instanceof Error ? error.message : 'Erro inesperado ao salvar manutenção.',
       })
     }
   }
@@ -118,7 +149,7 @@ export default function Maintenance() {
       })
 
       if (!response.ok) {
-        throw new Error('Falha ao excluir manutenção')
+        throw new Error(await getApiError(response))
       }
 
       setMaintenances(current => current.filter(item => item.id !== record.id))
@@ -126,9 +157,39 @@ export default function Maintenance() {
       toast.success('Manutenção excluída', {
         description: `${record.assetCode} · ${record.assetName}`,
       })
-    } catch {
+    } catch (error) {
       toast.error('Falha ao excluir manutenção', {
-        description: 'Verifique se o json-server está rodando em localhost:3001.',
+        description: error instanceof Error ? error.message : 'Erro inesperado ao excluir manutenção.',
+      })
+    }
+  }
+
+  const handleCompleteMaintenance = async (record: MaintenanceRecord) => {
+    try {
+      const response = await fetch(`${API_URL}/${record.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...record,
+          assetId: Number.parseInt(String(record.assetId).replace(/\D/g, ''), 10),
+          status: 'completed',
+          completedDate: new Date().toISOString().slice(0, 10),
+          daysUntil: 0,
+        }),
+      })
+
+      if (!response.ok) {
+        throw new Error(await getApiError(response))
+      }
+
+      const savedRecord = await response.json() as MaintenanceRecord
+      setMaintenances(current => current.map(item => item.id === savedRecord.id ? savedRecord : item))
+      toast.success('Manutenção concluída', {
+        description: `${savedRecord.assetCode} foi atualizado e salvo no banco de dados.`,
+      })
+    } catch (error) {
+      toast.error('Falha ao concluir manutenção', {
+        description: error instanceof Error ? error.message : 'Erro inesperado ao atualizar manutenção.',
       })
     }
   }
@@ -272,6 +333,17 @@ export default function Maintenance() {
                   </span>
                 </td>
                 <td>
+                  {(m.status === 'overdue' || m.status === 'in_progress') && (
+                    <button
+                      type="button"
+                      className="btn btn-primary"
+                      style={{ padding: '4px 10px', fontSize: 11, marginRight: 6 }}
+                      onClick={() => void handleCompleteMaintenance(m)}
+                      title="Marca a manutenção como concluída e registra a data atual."
+                    >
+                      Concluir
+                    </button>
+                  )}
                   <button
                     type="button"
                     className="btn btn-ghost"
@@ -299,7 +371,7 @@ export default function Maintenance() {
       {/* Modal */}
       {showModal && (
         <NewMaintenanceModal
-          overdueAssets={overdueAssets}
+          availableAssets={assets}
           onClose={() => setShowModal(false)}
           onSave={handleCreateMaintenance}
         />
@@ -309,13 +381,13 @@ export default function Maintenance() {
 }
 
 type NewMaintenanceModalProps = {
-  overdueAssets: Asset[]
+  availableAssets: Asset[]
   onClose: () => void
   onSave: (record: MaintenanceRecord) => void | Promise<void>
 }
 
-function NewMaintenanceModal({ overdueAssets, onClose, onSave }: NewMaintenanceModalProps) {
-  const fallbackAssets = overdueAssets.length > 0 ? overdueAssets : ASSETS
+function NewMaintenanceModal({ availableAssets, onClose, onSave }: NewMaintenanceModalProps) {
+  const fallbackAssets = availableAssets
   const [selectedAssetId, setSelectedAssetId] = useState(fallbackAssets[0]?.id ?? '')
   const [type, setType] = useState<MaintenanceRecord['type']>('preventive')
   const [scheduledDate, setScheduledDate] = useState(new Date().toISOString().slice(0, 10))
@@ -343,9 +415,29 @@ function NewMaintenanceModal({ overdueAssets, onClose, onSave }: NewMaintenanceM
       return
     }
 
-    if (!description.trim() || !responsible.trim() || !scheduledDate) {
-      toast.error('Preencha os campos obrigatórios', {
-        description: 'Ativo, data, descrição e responsável são obrigatórios.',
+    if (!scheduledDate) {
+      toast.error('Informe uma data válida', {
+        description: 'Selecione uma data existente no calendário.',
+      })
+      return
+    }
+
+    const missingFields = [
+      !description.trim() && 'Descrição',
+      !responsible.trim() && 'Responsável',
+    ].filter(Boolean)
+
+    if (missingFields.length > 0) {
+      toast.error(`Campo${missingFields.length > 1 ? 's' : ''} obrigatório${missingFields.length > 1 ? 's' : ''} não preenchido${missingFields.length > 1 ? 's' : ''}`, {
+        description: missingFields.join(', '),
+      })
+      return
+    }
+
+    const normalizedCost = cost.trim().replace(',', '.')
+    if (normalizedCost && (!Number.isFinite(Number(normalizedCost)) || Number(normalizedCost) < 0)) {
+      toast.error('Custo previsto inválido', {
+        description: 'Informe um valor numérico maior ou igual a zero.',
       })
       return
     }
@@ -366,7 +458,7 @@ function NewMaintenanceModal({ overdueAssets, onClose, onSave }: NewMaintenanceM
       responsible: responsible.trim(),
       status: daysUntil < 0 ? 'overdue' : 'scheduled',
       provider: provider.trim() || undefined,
-      cost: cost.trim() ? Number(cost) : undefined,
+      cost: normalizedCost ? Number(normalizedCost) : undefined,
       daysUntil,
     }
 
@@ -395,6 +487,7 @@ function NewMaintenanceModal({ overdueAssets, onClose, onSave }: NewMaintenanceM
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           <ModalField label="Ativo">
             <select
+              required
               style={selectStyle}
               value={selectedAssetId}
               onChange={e => handleAssetChange(e.target.value)}
@@ -416,12 +509,13 @@ function NewMaintenanceModal({ overdueAssets, onClose, onSave }: NewMaintenanceM
               </select>
             </ModalField>
             <ModalField label="Data programada">
-              <input type="date" style={inputStyle} value={scheduledDate} onChange={e => setScheduledDate(e.target.value)} />
+              <input required type="date" style={inputStyle} value={scheduledDate} title="Selecione uma data existente no calendário." onChange={e => setScheduledDate(e.target.value)} />
             </ModalField>
           </div>
           <ModalField label="Descrição">
             <textarea
               rows={3}
+              required
               placeholder="Descreva a manutenção a ser realizada…"
               value={description}
               onChange={e => setDescription(e.target.value)}
@@ -430,10 +524,10 @@ function NewMaintenanceModal({ overdueAssets, onClose, onSave }: NewMaintenanceM
           </ModalField>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
             <ModalField label="Responsável">
-              <input style={inputStyle} placeholder="Nome do responsável" value={responsible} onChange={e => setResponsible(e.target.value)} />
+              <input required style={inputStyle} placeholder="Nome do responsável" value={responsible} onChange={e => setResponsible(e.target.value)} />
             </ModalField>
             <ModalField label="Custo previsto (R$)">
-              <input type="number" style={inputStyle} placeholder="0,00" value={cost} onChange={e => setCost(e.target.value)} />
+              <input type="text" inputMode="decimal" style={inputStyle} placeholder="0,00" title="Use apenas números e vírgula decimal. Exemplo: 1520,00" value={cost} onChange={e => setCost(e.target.value.replace(/[^0-9,]/g, '').replace(/(,.*),/g, '$1'))} />
             </ModalField>
           </div>
           <ModalField label="Fornecedor / Oficina">

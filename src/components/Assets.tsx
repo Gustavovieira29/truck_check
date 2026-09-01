@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import { ASSETS, type Asset, type AssetType, type StatusType } from '../data/mockData'
 
-const API_URL = 'http://localhost:3001/assets'
+const API_URL = 'http://localhost:8000/api/assets'
 
 const STATUS_LABELS: Record<StatusType, string> = {
   ok: 'Regular',
@@ -45,7 +45,7 @@ export default function Assets() {
         }
       } catch {
         toast.error('Não foi possível carregar os ativos da API', {
-          description: 'Usando dados locais temporariamente. Inicie o json-server para persistência.',
+          description: 'Usando dados locais temporariamente. Verifique se a API está ativa.',
         })
       } finally {
         if (isMounted) {
@@ -85,11 +85,6 @@ export default function Assets() {
       return
     }
 
-    if (selected.type !== 'vehicle') {
-      toast.error('A edição está disponível apenas para veículos')
-      return
-    }
-
     setEditingVehicle(selected)
     setShowVehicleModal(true)
   }
@@ -126,12 +121,12 @@ export default function Assets() {
       setShowVehicleModal(false)
       setEditingVehicle(null)
 
-      toast.success(isEditing ? 'Veículo atualizado' : 'Veículo adicionado', {
+      toast.success(isEditing ? 'Ativo atualizado' : 'Ativo adicionado', {
         description: `${savedVehicle.code} · ${savedVehicle.name}`,
       })
     } catch {
       toast.error('Falha ao salvar veículo', {
-        description: 'Verifique se o json-server está rodando em localhost:3001.',
+        description: 'Verifique se a API está rodando em localhost:8000.',
       })
     }
   }
@@ -139,11 +134,6 @@ export default function Assets() {
   const handleDeleteVehicle = async () => {
     if (!selected) {
       toast.error('Selecione um veículo para excluir')
-      return
-    }
-
-    if (selected.type !== 'vehicle') {
-      toast.error('A exclusão está disponível apenas para veículos')
       return
     }
 
@@ -157,13 +147,13 @@ export default function Assets() {
       }
 
       setAssets(current => current.filter(item => item.id !== selected.id))
-      toast.success('Veículo excluído', {
+      toast.success('Ativo excluído', {
         description: `${selected.code} · ${selected.name}`,
       })
       setSelected(null)
     } catch {
       toast.error('Falha ao excluir veículo', {
-        description: 'Verifique se o json-server está rodando em localhost:3001.',
+        description: 'Verifique se a API está rodando em localhost:8000.',
       })
     }
   }
@@ -202,13 +192,13 @@ export default function Assets() {
           <FilterPill label="Vencido" active={statusFilter === 'overdue'} onClick={() => setStatusFilter(statusFilter === 'overdue' ? 'all' : 'overdue')} color="var(--status-overdue)" />
           <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
             <button className="btn btn-ghost" type="button" onClick={handleDeleteVehicle}>
-              Excluir Veículo
+              Excluir Ativo
             </button>
             <button className="btn btn-secondary" type="button" onClick={handleOpenEditVehicle}>
-              Editar Veículo
+              Editar Ativo
             </button>
             <button className="btn btn-primary" type="button" onClick={handleOpenCreateVehicle}>
-              + Novo Veículo
+              + Novo Ativo
             </button>
           </div>
         </div>
@@ -359,16 +349,12 @@ export default function Assets() {
             <button className="btn btn-primary" style={{ width: '100%', justifyContent: 'center' }}>
               Registrar Manutenção
             </button>
-            {selected.type === 'vehicle' && (
-              <>
-                <button className="btn btn-secondary" type="button" style={{ width: '100%', justifyContent: 'center' }} onClick={handleOpenEditVehicle}>
-                  Editar Veículo
-                </button>
-                <button className="btn btn-ghost" type="button" style={{ width: '100%', justifyContent: 'center' }} onClick={handleDeleteVehicle}>
-                  Excluir Veículo
-                </button>
-              </>
-            )}
+            <button className="btn btn-secondary" type="button" style={{ width: '100%', justifyContent: 'center' }} onClick={handleOpenEditVehicle}>
+              Editar Ativo
+            </button>
+            <button className="btn btn-ghost" type="button" style={{ width: '100%', justifyContent: 'center' }} onClick={handleDeleteVehicle}>
+              Excluir Ativo
+            </button>
           </div>
         </div>
       )}
@@ -409,6 +395,7 @@ function VehicleModal({ asset, onClose, onSave }: VehicleModalProps) {
     nextMaintenance: asset?.nextMaintenance ?? new Date().toISOString().slice(0, 10),
     lastInspection: asset?.lastInspection ?? new Date().toISOString().slice(0, 10),
     notes: asset?.notes ?? '',
+    type: asset?.type ?? 'vehicle',
   })
 
   const handleChange = (field: keyof typeof form, value: string) => {
@@ -416,8 +403,18 @@ function VehicleModal({ asset, onClose, onSave }: VehicleModalProps) {
   }
 
   const handleSubmit = () => {
-    if (!form.code.trim() || !form.name.trim() || !form.responsible.trim() || !form.location.trim() || !form.brand.trim() || !form.model.trim() || !form.year.trim() || !form.nextMaintenance) {
-      toast.error('Preencha os campos obrigatórios do veículo')
+    const missingFields = [
+      !form.code.trim() && 'Código',
+      !form.name.trim() && 'Nome',
+      !form.responsible.trim() && 'Responsável',
+      !form.location.trim() && 'Localização',
+      !form.brand.trim() && 'Marca',
+      !form.model.trim() && 'Modelo',
+      !form.year.trim() && 'Ano',
+      !form.nextMaintenance && 'Próxima manutenção',
+    ].filter(Boolean)
+    if (missingFields.length > 0) {
+      toast.error('Campos obrigatórios não preenchidos', { description: missingFields.join(', ') })
       return
     }
 
@@ -455,7 +452,7 @@ function VehicleModal({ asset, onClose, onSave }: VehicleModalProps) {
       id: asset?.id ?? `a-${Date.now()}`,
       code: form.code.trim(),
       name: form.name.trim(),
-      type: 'vehicle',
+      type: form.type as AssetType,
       category: form.category.trim(),
       plate: normalizedPlate || undefined,
       responsible: form.responsible.trim(),
@@ -490,46 +487,59 @@ function VehicleModal({ asset, onClose, onSave }: VehicleModalProps) {
         onClick={e => e.stopPropagation()}
       >
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-          <h2 style={{ fontSize: 15, fontWeight: 600, color: 'var(--foreground)' }}>{asset ? 'Editar Veículo' : 'Novo Veículo'}</h2>
+          <h2 style={{ fontSize: 15, fontWeight: 600, color: 'var(--foreground)' }}>{asset ? 'Editar Ativo' : 'Novo Ativo'}</h2>
           <button type="button" onClick={onClose} style={{ background: 'none', border: 'none', color: 'var(--muted-foreground)', cursor: 'pointer', fontSize: 20, lineHeight: 1 }}>×</button>
         </div>
 
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+          <ModalField label="Tipo de ativo">
+            <select style={inputStyle} value={form.type} onChange={e => handleChange('type', e.target.value)}>
+              <option value="vehicle">Veículo</option>
+              <option value="tool">Ferramenta</option>
+              <option value="equipment">Equipamento</option>
+            </select>
+          </ModalField>
           <ModalField label="Código">
-            <input style={inputStyle} value={form.code} onChange={e => handleChange('code', e.target.value)} />
+            <input required style={inputStyle} value={form.code} onChange={e => handleChange('code', e.target.value)} />
           </ModalField>
           <ModalField label="Nome">
-            <input style={inputStyle} value={form.name} onChange={e => handleChange('name', e.target.value)} />
+            <input required style={inputStyle} value={form.name} onChange={e => handleChange('name', e.target.value)} />
           </ModalField>
           <ModalField label="Marca">
-            <input style={inputStyle} value={form.brand} onChange={e => handleChange('brand', e.target.value)} />
+            <input required style={inputStyle} value={form.brand} onChange={e => handleChange('brand', e.target.value)} />
           </ModalField>
           <ModalField label="Modelo">
-            <input style={inputStyle} value={form.model} onChange={e => handleChange('model', e.target.value)} />
+            <input required style={inputStyle} value={form.model} onChange={e => handleChange('model', e.target.value)} />
           </ModalField>
           <ModalField label="Ano">
-            <input type="number" style={inputStyle} value={form.year} onChange={e => handleChange('year', e.target.value)} />
+            <input required type="number" min="1950" max={new Date().getFullYear() + 1} style={inputStyle} value={form.year} onChange={e => handleChange('year', e.target.value)} />
           </ModalField>
           <ModalField label="Placa">
-            <input style={inputStyle} value={form.plate} onChange={e => handleChange('plate', e.target.value)} />
+            <input
+              style={inputStyle}
+              value={form.plate}
+              placeholder="ABC-1D23"
+              title="Aceita placas Mercosul e antigas. Exemplo: ABC-1D23."
+              onChange={e => handleChange('plate', e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').replace(/^(.{3})(.{0,4}).*$/, '$1-$2'))}
+            />
           </ModalField>
           <ModalField label="Responsável">
-            <input style={inputStyle} value={form.responsible} onChange={e => handleChange('responsible', e.target.value)} />
+            <input required style={inputStyle} value={form.responsible} onChange={e => handleChange('responsible', e.target.value)} />
           </ModalField>
           <ModalField label="Localização">
-            <input style={inputStyle} value={form.location} onChange={e => handleChange('location', e.target.value)} />
+            <input required style={inputStyle} value={form.location} onChange={e => handleChange('location', e.target.value)} />
           </ModalField>
           <ModalField label="Categoria">
             <input style={inputStyle} value={form.category} onChange={e => handleChange('category', e.target.value)} />
           </ModalField>
           <ModalField label="Hodômetro (km)">
-            <input type="number" style={inputStyle} value={form.mileage} onChange={e => handleChange('mileage', e.target.value)} />
+            <input type="number" min="0" style={inputStyle} value={form.mileage} title="Informe somente quilômetros, sem ponto ou vírgula." onChange={e => handleChange('mileage', e.target.value)} />
           </ModalField>
           <ModalField label="Última inspeção">
             <input type="date" style={inputStyle} value={form.lastInspection} onChange={e => handleChange('lastInspection', e.target.value)} />
           </ModalField>
           <ModalField label="Próxima manutenção">
-            <input type="date" style={inputStyle} value={form.nextMaintenance} onChange={e => handleChange('nextMaintenance', e.target.value)} />
+            <input required type="date" style={inputStyle} value={form.nextMaintenance} onChange={e => handleChange('nextMaintenance', e.target.value)} />
           </ModalField>
           <ModalField label="Status">
             <select style={inputStyle} value={form.status} onChange={e => handleChange('status', e.target.value)}>
@@ -547,7 +557,7 @@ function VehicleModal({ asset, onClose, onSave }: VehicleModalProps) {
 
         <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 20 }}>
           <button className="btn btn-ghost" type="button" onClick={onClose}>Cancelar</button>
-          <button className="btn btn-primary" type="button" onClick={handleSubmit}>{asset ? 'Salvar alterações' : 'Cadastrar veículo'}</button>
+          <button className="btn btn-primary" type="button" onClick={handleSubmit}>{asset ? 'Salvar alterações' : 'Cadastrar ativo'}</button>
         </div>
       </div>
     </div>

@@ -1,4 +1,5 @@
-import { ASSETS, MAINTENANCES, INSPECTIONS } from '../data/mockData'
+import { useEffect, useState } from 'react'
+import { ASSETS, INSPECTIONS, MAINTENANCES, type Asset, type InspectionReport, type MaintenanceRecord } from '../data/mockData'
 
 type Page = 'dashboard' | 'assets' | 'maintenance' | 'inspection' | 'reports'
 
@@ -15,19 +16,42 @@ const STATUS_LABELS: Record<string, string> = {
 }
 
 export default function Dashboard({ onNavigate }: Props) {
-  const total = ASSETS.length
-  const ok = ASSETS.filter(a => a.status === 'ok').length
-  const warning = ASSETS.filter(a => a.status === 'warning').length
-  const critical = ASSETS.filter(a => a.status === 'critical').length
-  const overdue = ASSETS.filter(a => a.status === 'overdue').length
-  const inactive = ASSETS.filter(a => a.status === 'inactive').length
+  const [assets, setAssets] = useState<Asset[]>(ASSETS)
+  const [maintenances, setMaintenances] = useState<MaintenanceRecord[]>(MAINTENANCES)
+  const [inspections, setInspections] = useState<InspectionReport[]>(INSPECTIONS)
 
-  const overdueMaints = MAINTENANCES.filter(m => m.status === 'overdue').length
-  const upcomingMaints = MAINTENANCES.filter(m => m.daysUntil >= 0 && m.daysUntil <= 7).length
-  const inProgress = MAINTENANCES.filter(m => m.status === 'in_progress').length
+  useEffect(() => {
+    Promise.all([fetch('http://localhost:8000/api/assets'), fetch('http://localhost:8000/api/maintenance'), fetch('http://localhost:8000/api/inspections')])
+      .then(async ([assetsResponse, maintenanceResponse, inspectionsResponse]) => {
+        if (!assetsResponse.ok || !maintenanceResponse.ok || !inspectionsResponse.ok) return
+        const [assetsData, maintenanceData, inspectionsData] = await Promise.all([assetsResponse.json(), maintenanceResponse.json(), inspectionsResponse.json()])
+        setAssets(assetsData as Asset[])
+        setMaintenances(maintenanceData as MaintenanceRecord[])
+        setInspections((inspectionsData as Array<InspectionReport & { aiFindings: string | string[] }>).map(item => ({
+          ...item,
+          aiFindings: Array.isArray(item.aiFindings) ? item.aiFindings : (item.aiFindings || '').split('\n').filter(Boolean),
+        })))
+      })
+      .catch(() => undefined)
+  }, [])
 
-  const urgentAssets = ASSETS.filter(a => a.status === 'overdue' || a.status === 'critical')
-  const upcoming = MAINTENANCES.filter(m => m.daysUntil >= 0).sort((a, b) => a.daysUntil - b.daysUntil).slice(0, 5)
+  const total = assets.length
+  const ok = assets.filter(a => a.status === 'ok').length
+  const warning = assets.filter(a => a.status === 'warning').length
+  const critical = assets.filter(a => a.status === 'critical').length
+  const overdue = assets.filter(a => a.status === 'overdue').length
+  const inactive = assets.filter(a => a.status === 'inactive').length
+  const today = new Date().toISOString().slice(0, 10)
+
+  const overdueMaints = maintenances.filter(m => m.status === 'overdue').length
+  const upcomingMaints = maintenances.filter(m => m.status !== 'completed' && m.scheduledDate > today && m.scheduledDate <= new Date(Date.now() + 7 * 86_400_000).toISOString().slice(0, 10)).length
+  const inProgress = maintenances.filter(m => m.status === 'in_progress').length
+
+  const urgentAssets = assets.filter(a => a.status === 'overdue')
+  const upcoming = maintenances
+    .filter(m => m.status !== 'completed' && m.scheduledDate > today)
+    .sort((a, b) => a.scheduledDate.localeCompare(b.scheduledDate))
+    .slice(0, 5)
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
@@ -35,7 +59,7 @@ export default function Dashboard({ onNavigate }: Props) {
       {/* KPI row */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12 }}>
         <KpiCard label="Total de Ativos" value={total} sub="veículos + ferramentas" color="var(--foreground)" />
-        <KpiCard label="Regulares" value={ok} sub={`${Math.round(ok/total*100)}% da frota`} color="var(--status-ok)" onClick={() => onNavigate('assets')} />
+        <KpiCard label="Regulares" value={ok} sub={`${total ? Math.round(ok / total * 100) : 0}% da frota`} color="var(--status-ok)" onClick={() => onNavigate('assets')} />
         <KpiCard label="Atenção" value={warning} sub="próximos ao vencimento" color="var(--status-warning)" onClick={() => onNavigate('assets')} />
         <KpiCard label="Críticos / Vencidos" value={critical + overdue} sub="requer ação imediata" color="var(--status-critical)" onClick={() => onNavigate('assets')} />
         <KpiCard label="Manutenções Vencidas" value={overdueMaints} sub="atraso" color="var(--status-overdue)" onClick={() => onNavigate('maintenance')} />
@@ -49,7 +73,7 @@ export default function Dashboard({ onNavigate }: Props) {
             SAÚDE DA FROTA
           </span>
           <span className="font-mono" style={{ fontSize: 11, color: ok > total/2 ? 'var(--status-ok)' : 'var(--status-warning)' }}>
-            {Math.round(ok/total*100)}% OPERACIONAL
+            {total ? Math.round(ok / total * 100) : 0}% OPERACIONAL
           </span>
         </div>
         <div style={{ display: 'flex', height: 8, borderRadius: 4, overflow: 'hidden', gap: 1 }}>
@@ -83,7 +107,7 @@ export default function Dashboard({ onNavigate }: Props) {
             <span className="font-mono" style={{ fontSize: 11, letterSpacing: '0.08em', color: 'var(--muted-foreground)' }}>
               AÇÃO IMEDIATA
             </span>
-            <span style={{ fontSize: 11, color: 'var(--status-critical)' }}>⚠ {urgentAssets.length} ativo(s)</span>
+            <span style={{ fontSize: 11, color: 'var(--status-overdue)' }}>⚠ {urgentAssets.length} ativo(s)</span>
           </div>
           <div style={{ padding: 8 }}>
             {urgentAssets.length === 0 ? (
@@ -131,7 +155,11 @@ export default function Dashboard({ onNavigate }: Props) {
             </button>
           </div>
           <div style={{ padding: 8 }}>
-            {upcoming.map(m => (
+            {upcoming.length === 0 ? (
+              <div style={{ padding: '20px', textAlign: 'center', color: 'var(--muted-foreground)', fontSize: 13 }}>
+                Nenhuma manutenção futura programada.
+              </div>
+            ) : upcoming.map(m => (
               <div
                 key={m.id}
                 style={{
@@ -150,7 +178,7 @@ export default function Dashboard({ onNavigate }: Props) {
                   </div>
                 </div>
                 <div className="font-mono" style={{ fontSize: 12, color: m.daysUntil <= 3 ? 'var(--status-critical)' : m.daysUntil <= 7 ? 'var(--status-warning)' : 'var(--muted-foreground)', textAlign: 'right', flexShrink: 0, marginLeft: 12 }}>
-                  {m.daysUntil === 0 ? 'HOJE' : `+${m.daysUntil}d`}
+                  {new Date(`${m.scheduledDate}T00:00:00`).toLocaleDateString('pt-BR')}
                 </div>
               </div>
             ))}
@@ -169,7 +197,7 @@ export default function Dashboard({ onNavigate }: Props) {
           </button>
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 0 }}>
-          {INSPECTIONS.map((ins, i) => (
+          {inspections.slice(0, 3).map((ins, i) => (
             <div key={ins.id} style={{ padding: '16px 20px', borderRight: i < 2 ? '1px solid var(--border)' : 'none' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
                 <span className="font-mono" style={{ fontSize: 10, color: 'var(--muted-foreground)' }}>{ins.assetCode}</span>
