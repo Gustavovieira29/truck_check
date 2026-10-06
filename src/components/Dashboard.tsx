@@ -19,6 +19,7 @@ export default function Dashboard({ onNavigate }: Props) {
   const [assets, setAssets] = useState<Asset[]>(ASSETS)
   const [maintenances, setMaintenances] = useState<MaintenanceRecord[]>(MAINTENANCES)
   const [inspections, setInspections] = useState<InspectionReport[]>(INSPECTIONS)
+  const [search, setSearch] = useState('')
 
   useEffect(() => {
     Promise.all([fetch('http://localhost:8000/api/assets'), fetch('http://localhost:8000/api/maintenance'), fetch('http://localhost:8000/api/inspections')])
@@ -35,12 +36,17 @@ export default function Dashboard({ onNavigate }: Props) {
       .catch(() => undefined)
   }, [])
 
-  const total = assets.length
-  const ok = assets.filter(a => a.status === 'ok').length
-  const warning = assets.filter(a => a.status === 'warning').length
-  const critical = assets.filter(a => a.status === 'critical').length
-  const overdue = assets.filter(a => a.status === 'overdue').length
-  const inactive = assets.filter(a => a.status === 'inactive').length
+  const visibleAssets = assets.filter(asset => {
+    const term = search.trim().toLowerCase()
+    return !term || [asset.name, asset.code, asset.responsible, asset.location].some(value => value.toLowerCase().includes(term))
+  })
+
+  const total = visibleAssets.length
+  const ok = visibleAssets.filter(a => a.status === 'ok').length
+  const warning = visibleAssets.filter(a => a.status === 'warning').length
+  const critical = visibleAssets.filter(a => a.status === 'critical').length
+  const overdue = visibleAssets.filter(a => a.status === 'overdue').length
+  const inactive = visibleAssets.filter(a => a.status === 'inactive').length
   const today = new Date().toISOString().slice(0, 10)
 
   const overdueMaints = maintenances.filter(m => m.status === 'overdue').length
@@ -55,6 +61,14 @@ export default function Dashboard({ onNavigate }: Props) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+
+      <input
+        value={search}
+        onChange={event => setSearch(event.target.value)}
+        placeholder="Pesquisar ativo, código, responsável ou local..."
+        aria-label="Pesquisar ativos no dashboard"
+        style={{ width: '100%', boxSizing: 'border-box', background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 4, padding: '9px 12px', color: 'var(--foreground)', fontSize: 13 }}
+      />
 
       {/* KPI row */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12 }}>

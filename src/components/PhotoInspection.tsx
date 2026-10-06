@@ -40,6 +40,7 @@ export default function PhotoInspection() {
   const [aiState, setAiState] = useState<AIState>('idle')
   const [preview, setPreview] = useState<string | null>(null)
   const [result, setResult] = useState<typeof MOCK_ANALYSIS | null>(null)
+  const [analysisImageUrl, setAnalysisImageUrl] = useState<string | null>(null)
   const [selectedAsset, setSelectedAsset] = useState('')
   const [inspector, setInspector] = useState('Roberto Alves')
   const [saving, setSaving] = useState(false)
@@ -69,22 +70,35 @@ export default function PhotoInspection() {
     }
     const reader = new FileReader()
     reader.onload = e => {
-      setPreview(e.target?.result as string)
-      runAnalysis()
+      const imageData = e.target?.result as string
+      setPreview(imageData)
+      runAnalysis(imageData)
     }
     reader.readAsDataURL(file)
   }
 
-  const runAnalysis = () => {
+  const runAnalysis = async (imageData: string) => {
     setAiState('uploading')
     setResult(null)
-    setTimeout(() => {
-      setAiState('analyzing')
-      setTimeout(() => {
-        setAiState('done')
-        setResult(MOCK_ANALYSIS)
-      }, 2800)
-    }, 900)
+    setAnalysisImageUrl(null)
+    setAiState('analyzing')
+    try {
+      const response = await fetch(`${INSPECTIONS_API}/analyze`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ image_data: imageData }),
+      })
+      if (!response.ok) throw new Error(`A API respondeu com HTTP ${response.status}.`)
+      const analysis = await response.json() as { image_url: string; ai_score: number; ai_findings: string[]; ai_status: InspectionReport['aiStatus'] }
+      setAnalysisImageUrl(`http://localhost:8000${analysis.image_url}`)
+      setResult({ aiScore: analysis.ai_score, aiFindings: analysis.ai_findings, aiStatus: analysis.ai_status, approved: false })
+    } catch {
+      setResult(MOCK_ANALYSIS)
+      setAnalysisImageUrl(null)
+      toast.warning('Análise demonstrativa', { description: 'A análise real não respondeu; exibindo o resultado local.' })
+    } finally {
+      setAiState('done')
+    }
   }
 
   const handleDrop = (e: React.DragEvent) => {
@@ -94,8 +108,9 @@ export default function PhotoInspection() {
   }
 
   const handleDemoImage = () => {
-    setPreview('https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=600&h=400&fit=crop&auto=format')
-    runAnalysis()
+    const imageUrl = 'https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=600&h=400&fit=crop&auto=format'
+    setPreview(imageUrl)
+    runAnalysis(imageUrl)
   }
 
   const saveInspection = async (approved: boolean) => {
@@ -124,7 +139,7 @@ export default function PhotoInspection() {
           assetCode: asset.code,
           date: new Date().toISOString().slice(0, 10),
           inspector: inspector.trim(),
-          imageUrl: preview,
+          imageUrl: analysisImageUrl || preview,
           aiScore: result.aiScore,
           aiFindings: result.aiFindings.join('\n'),
           aiStatus: result.aiStatus,

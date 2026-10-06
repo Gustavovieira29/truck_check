@@ -1,6 +1,8 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 import logging
+from pathlib import Path
 
 from backend.app.config import settings
 from backend.app.database import Base, engine
@@ -15,6 +17,9 @@ from backend.app.seed import seed_database
 
 
 app = FastAPI(title='Truck Check API', version='1.0.0')
+UPLOAD_DIR = Path(__file__).resolve().parent.parent / 'uploads'
+UPLOAD_DIR.mkdir(exist_ok=True)
+app.mount('/uploads', StaticFiles(directory=UPLOAD_DIR), name='uploads')
 
 logger = logging.getLogger('truck_check_api')
 

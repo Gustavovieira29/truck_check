@@ -1,4 +1,8 @@
 import smtplib
+import base64
+import json
+from urllib.parse import urlencode
+from urllib.request import Request, urlopen
 from email.message import EmailMessage
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -25,6 +29,10 @@ def to_response(item: ReportLog) -> ReportResponse:
 
 
 def send_email(report: ReportCreate) -> None:
+    if settings.google_client_id and settings.google_client_secret and settings.google_refresh_token and settings.google_sender:
+        send_gmail_api(report)
+        return
+
     if not settings.smtp_host or not settings.smtp_from:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -51,6 +59,46 @@ def send_email(report: ReportCreate) -> None:
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail=f'Não foi possível enviar o e-mail: {exc}',
+        ) from exc
+
+
+def send_gmail_api(report: ReportCreate) -> None:
+    try:
+        token_request = Request(
+            'https://oauth2.googleapis.com/token',
+            data=urlencode({
+                'client_id': settings.google_client_id,
+                'client_secret': settings.google_client_secret,
+                'refresh_token': settings.google_refresh_token,
+                'grant_type': 'refresh_token',
+            }).encode(),
+            headers={'Content-Type': 'application/x-www-form-urlencoded'},
+            method='POST',
+        )
+        with urlopen(token_request, timeout=15) as response:
+            access_token = json.loads(response.read().decode())['access_token']
+
+        message = EmailMessage()
+        message['Subject'] = f'Truck Check - Relatório {report.type}'
+        message['From'] = settings.google_sender
+        message['To'] = ', '.join(report.recipients)
+        message.set_content(
+            f'Relatório {report.type} ({report.period}) gerado em {report.generated_at.isoformat()}.\n'
+            'Acesse o painel Truck Check para consultar os detalhes.'
+        )
+        encoded_message = base64.urlsafe_b64encode(message.as_bytes()).decode().rstrip('=')
+        send_request = Request(
+            'https://gmail.googleapis.com/gmail/v1/users/me/messages/send',
+            data=json.dumps({'raw': encoded_message}).encode(),
+            headers={'Authorization': f'Bearer {access_token}', 'Content-Type': 'application/json'},
+            method='POST',
+        )
+        with urlopen(send_request, timeout=15):
+            return
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail='Não foi possível enviar o e-mail pela Gmail API.',
         ) from exc
 
 

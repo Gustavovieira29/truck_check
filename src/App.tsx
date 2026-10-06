@@ -8,6 +8,8 @@ import Reports from './components/Reports'
 
 type Page = 'dashboard' | 'assets' | 'maintenance' | 'parts' | 'inspection' | 'reports'
 
+const AUTH_TOKEN_KEY = 'truck-check-token'
+
 const NAV = [
   { id: 'dashboard' as Page, icon: GridIcon, label: 'Dashboard' },
   { id: 'assets' as Page, icon: TruckIcon, label: 'Ativos' },
@@ -23,8 +25,13 @@ function pageFromHash(): Page {
 }
 
 export default function App() {
+  const [token, setToken] = useState(() => window.localStorage.getItem(AUTH_TOKEN_KEY))
   const [page, setPage] = useState<Page>(pageFromHash)
   const [sidebarOpen, setSidebarOpen] = useState(true)
+
+  if (!token) {
+    return <Login onLogin={value => { window.localStorage.setItem(AUTH_TOKEN_KEY, value); setToken(value) }} />
+  }
 
   useEffect(() => {
     const handleHashChange = () => setPage(pageFromHash())
@@ -131,6 +138,9 @@ export default function App() {
             padding: '0 24px',
             background: 'var(--card)',
             flexShrink: 0,
+            position: 'sticky',
+            top: 0,
+            zIndex: 10,
           }}
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
@@ -160,6 +170,13 @@ export default function App() {
             >
               RC
             </div>
+            <button
+              className="btn btn-ghost"
+              type="button"
+              onClick={() => { window.localStorage.removeItem(AUTH_TOKEN_KEY); setToken(null) }}
+            >
+              Sair
+            </button>
           </div>
         </header>
 
@@ -175,6 +192,61 @@ export default function App() {
       </div>
     </div>
   )
+}
+
+function Login({ onLogin }: { onLogin: (token: string) => void }) {
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [error, setError] = useState('')
+  const [loading, setLoading] = useState(false)
+
+  const submit = async (event: React.FormEvent) => {
+    event.preventDefault()
+    setLoading(true)
+    setError('')
+    try {
+      const response = await fetch('http://localhost:8000/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
+      })
+      const result = await response.json() as { token?: string; user?: string; detail?: string }
+      if (!response.ok || !result.token || result.user === 'guest') throw new Error(result.detail || 'E-mail ou senha inválidos.')
+      onLogin(result.token)
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : 'Não foi possível entrar.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', background: 'var(--background)', padding: 24 }}>
+      <form onSubmit={submit} style={{ width: '100%', maxWidth: 380, background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 6, padding: 28 }}>
+        <div className="font-mono" style={{ color: 'var(--primary)', fontSize: 12, letterSpacing: '0.08em', marginBottom: 8 }}>FLEETGUARD</div>
+        <h1 style={{ color: 'var(--foreground)', fontSize: 22, marginBottom: 22 }}>Acessar sistema</h1>
+        <label style={{ display: 'block', color: 'var(--muted-foreground)', fontSize: 12, marginBottom: 6 }}>E-mail</label>
+        <input value={email} onChange={event => setEmail(event.target.value)} type="email" required style={loginInputStyle} />
+        <label style={{ display: 'block', color: 'var(--muted-foreground)', fontSize: 12, margin: '14px 0 6px' }}>Senha</label>
+        <input value={password} onChange={event => setPassword(event.target.value)} type="password" required style={loginInputStyle} />
+        {error && <div style={{ color: 'var(--status-critical)', fontSize: 12, marginTop: 12 }}>{error}</div>}
+        <button className="btn btn-primary" type="submit" disabled={loading} style={{ width: '100%', marginTop: 20 }}>
+          {loading ? 'Entrando...' : 'Entrar'}
+        </button>
+      </form>
+    </div>
+  )
+}
+
+const loginInputStyle = {
+  width: '100%',
+  boxSizing: 'border-box' as const,
+  background: 'var(--background)',
+  border: '1px solid var(--border)',
+  borderRadius: 4,
+  padding: '9px 10px',
+  color: 'var(--foreground)',
+  fontSize: 13,
 }
 
 function StatusDot() {
