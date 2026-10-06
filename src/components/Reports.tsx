@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { toast } from 'sonner'
 import { jsPDF } from 'jspdf'
+import { apiUrl } from '../config'
 import { ASSETS, MAINTENANCES } from '../data/mockData'
 
 type Period = 'daily' | 'weekly' | 'monthly'
@@ -81,7 +82,7 @@ export default function Reports() {
     setGenerating(true)
     setGenerated(false)
     try {
-      const response = await fetch('http://localhost:8000/api/reports', {
+      const response = await fetch(apiUrl('/api/reports'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
+import { apiUrl } from '../config'
 
 type Part = {
   id: number
@@ -12,7 +13,7 @@ type Part = {
   assetId?: number
 }
 
-const API_URL = 'http://localhost:8000/api/parts'
+const API_URL = apiUrl('/api/parts')
 
 const emptyForm = { code: '', name: '', quantity: '0', minimumQuantity: '0', unit: 'un', location: '' }
 

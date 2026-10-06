@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { apiUrl } from './config'
 import Dashboard from './components/Dashboard'
 import Assets from './components/Assets'
 import Maintenance from './components/Maintenance'
@@ -29,10 +30,6 @@ export default function App() {
   const [page, setPage] = useState<Page>(pageFromHash)
   const [sidebarOpen, setSidebarOpen] = useState(true)
 
-  if (!token) {
-    return <Login onLogin={value => { window.localStorage.setItem(AUTH_TOKEN_KEY, value); setToken(value) }} />
-  }
-
   useEffect(() => {
     const handleHashChange = () => setPage(pageFromHash())
     window.addEventListener('hashchange', handleHashChange)
@@ -41,6 +38,15 @@ export default function App() {
 
   const navigate = (nextPage: Page) => {
     window.location.hash = nextPage
+  }
+
+  const handleLogin = (value: string) => {
+    window.localStorage.setItem(AUTH_TOKEN_KEY, value)
+    setToken(value)
+  }
+
+  if (!token) {
+    return <Login onLogin={handleLogin} />
   }
 
   return (
@@ -205,7 +211,7 @@ function Login({ onLogin }: { onLogin: (token: string) => void }) {
     setLoading(true)
     setError('')
     try {
-      const response = await fetch('http://localhost:8000/api/auth/login', {
+      const response = await fetch(apiUrl('/api/auth/login'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password }),

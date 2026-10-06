@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { apiUrl } from '../config'
 import { ASSETS, INSPECTIONS, MAINTENANCES, type Asset, type InspectionReport, type MaintenanceRecord } from '../data/mockData'
 
 type Page = 'dashboard' | 'assets' | 'maintenance' | 'inspection' | 'reports'
@@ -22,7 +23,7 @@ export default function Dashboard({ onNavigate }: Props) {
   const [search, setSearch] = useState('')
 
   useEffect(() => {
-    Promise.all([fetch('http://localhost:8000/api/assets'), fetch('http://localhost:8000/api/maintenance'), fetch('http://localhost:8000/api/inspections')])
+    Promise.all([fetch(apiUrl('/api/assets')), fetch(apiUrl('/api/maintenance')), fetch(apiUrl('/api/inspections'))])
       .then(async ([assetsResponse, maintenanceResponse, inspectionsResponse]) => {
         if (!assetsResponse.ok || !maintenanceResponse.ok || !inspectionsResponse.ok) return
         const [assetsData, maintenanceData, inspectionsData] = await Promise.all([assetsResponse.json(), maintenanceResponse.json(), inspectionsResponse.json()])

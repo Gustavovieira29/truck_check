@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
+import { apiUrl } from '../config'
 import { ASSETS, type Asset, type AssetType, type StatusType } from '../data/mockData'
 
-const API_URL = 'http://localhost:8000/api/assets'
+const API_URL = apiUrl('/api/assets')
 
 const STATUS_LABELS: Record<StatusType, string> = {
   ok: 'Regular',
@@ -126,7 +127,7 @@ export default function Assets() {
       })
     } catch {
       toast.error('Falha ao salvar veículo', {
-        description: 'Verifique se a API está rodando em localhost:8000.',
+        description: 'Verifique se a API está rodando em 127.0.0.1:8000.',
       })
     }
   }
@@ -153,7 +154,7 @@ export default function Assets() {
       setSelected(null)
     } catch {
       toast.error('Falha ao excluir veículo', {
-        description: 'Verifique se a API está rodando em localhost:8000.',
+        description: 'Verifique se a API está rodando em 127.0.0.1:8000.',
       })
     }
   }

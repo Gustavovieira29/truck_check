@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
+import { apiUrl } from '../config'
 import { ASSETS, MAINTENANCES, type Asset, type MaintenanceRecord } from '../data/mockData'
 
-const API_URL = 'http://localhost:8000/api/maintenance'
+const API_URL = apiUrl('/api/maintenance')
 
 async function getApiError(response: Response): Promise<string> {
   try {
@@ -58,7 +59,7 @@ export default function Maintenance() {
       try {
         const [response, assetsResponse] = await Promise.all([
           fetch(API_URL),
-          fetch('http://localhost:8000/api/assets'),
+          fetch(apiUrl('/api/assets')),
         ])
         if (!response.ok || !assetsResponse.ok) {
           throw new Error(!response.ok ? await getApiError(response) : await getApiError(assetsResponse))

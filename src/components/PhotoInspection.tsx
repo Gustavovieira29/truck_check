@@ -1,14 +1,15 @@
 import { useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { jsPDF } from 'jspdf'
+import { apiUrl } from '../config'
 import { INSPECTIONS, type InspectionReport } from '../data/mockData'
 
 type AIState = 'idle' | 'uploading' | 'analyzing' | 'done'
 
 type ApiAsset = { id: number; code: string; name: string; responsible: string }
 
-const INSPECTIONS_API = 'http://localhost:8000/api/inspections'
-const ASSETS_API = 'http://localhost:8000/api/assets'
+const INSPECTIONS_API = apiUrl('/api/inspections')
+const ASSETS_API = apiUrl('/api/assets')
 
 function normalizeInspection(item: InspectionReport & { aiFindings: string | string[]; id: string | number; assetId: string | number }): InspectionReport {
   return {
@@ -90,7 +91,7 @@ export default function PhotoInspection() {
       })
       if (!response.ok) throw new Error(`A API respondeu com HTTP ${response.status}.`)
       const analysis = await response.json() as { image_url: string; ai_score: number; ai_findings: string[]; ai_status: InspectionReport['aiStatus'] }
-      setAnalysisImageUrl(`http://localhost:8000${analysis.image_url}`)
+      setAnalysisImageUrl(analysis.image_url.startsWith('http') ? analysis.image_url : apiUrl(analysis.image_url))
       setResult({ aiScore: analysis.ai_score, aiFindings: analysis.ai_findings, aiStatus: analysis.ai_status, approved: false })
     } catch {
       setResult(MOCK_ANALYSIS)
