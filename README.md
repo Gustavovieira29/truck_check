@@ -55,64 +55,85 @@ Este projeto propõe um sistema automatizado capaz de:
 - **SMTP** — serviço de envio de e-mail, configurável por variáveis de ambiente;
 - **Mailpit** — caixa de e-mail local para demonstração sem credenciais externas.
 
-## Instruções de Instalação, Dependências e Execução
-
-> Ajuste os comandos abaixo conforme a estrutura final do repositório (ex: se front-end e
-> back-end estiverem em pastas separadas `/frontend` e `/backend`).
+## Clonar e executar localmente
 
 ### Pré-requisitos
 
-- [Node.js](https://nodejs.org/) 18 ou superior;
-- Python 3.12;
-- npm;
-- Docker Desktop, somente para demonstrar e-mails no Mailpit.
+- [Git](https://git-scm.com/);
+- [Node.js](https://nodejs.org/) 20.19 ou superior (ou 22.12 ou superior) e npm;
+- Python 3.12.
 
-### Clonando o repositório
+Docker Desktop é opcional e só é necessário para testar a caixa de e-mail local Mailpit.
+
+### Windows (PowerShell)
+
+Clone o repositório e entre na pasta:
+
+```powershell
+git clone https://github.com/Gustavovieira29/truck_check.git
+cd truck_check
+```
+
+Crie o arquivo local de configuração, o ambiente virtual Python e instale as dependências:
+
+```powershell
+Copy-Item backend\.env.example backend\.env
+py -3.12 -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r backend\requirements.txt
+npm install
+```
+
+Abra **dois terminais** na pasta `truck_check`. No primeiro, inicie a API:
+
+```powershell
+.\.venv\Scripts\python.exe -m uvicorn backend.app:app --host 127.0.0.1 --port 8000
+```
+
+No segundo, inicie o painel:
+
+```powershell
+npm run dev
+```
+
+Abra o endereço indicado pelo Vite (normalmente <http://localhost:5173/>). A documentação da API fica em <http://localhost:8000/docs>.
+
+O arquivo de exemplo configura SQLite local e credenciais apenas para demonstração:
+
+- **E-mail:** `admin@truckcheck.local`
+- **Senha:** `truckcheck-local-only`
+
+Essas credenciais são públicas e servem somente para desenvolvimento local. Altere `ADMIN_PASSWORD` em `backend/.env` antes de expor o projeto a outras pessoas ou à internet. O arquivo `.env` é local e não deve ser enviado ao Git.
+
+### macOS e Linux
+
+Use os mesmos comandos de clone. Para preparar o ambiente, execute:
 
 ```bash
-git clone <URL_DO_REPOSITORIO>
-cd <NOME_DO_REPOSITORIO>
+cp backend/.env.example backend/.env
+python3.12 -m venv .venv
+.venv/bin/python -m pip install -r backend/requirements.txt
+npm install
 ```
 
-### Configuração do Back-end (FastAPI)
+Em dois terminais na pasta do projeto, inicie os serviços (use `python` se seu comando para Python 3.12 tiver esse nome):
 
 ```bash
-py -3.12 -m pip install -r backend/requirements.txt
-npm run dev:backend
+.venv/bin/python -m uvicorn backend.app:app --host 127.0.0.1 --port 8000
 ```
 
-O banco `truck_check.db` é criado automaticamente na raiz do projeto e recebe dados iniciais
-na primeira inicialização. A API fica disponível em `http://localhost:8000` e a documentação
-interativa fica em `http://localhost:8000/docs`.
-
-Para e-mail externo, crie `backend/.env` a partir de `backend/.env.example` e informe os dados
-do seu servidor SMTP:
-
-```env
-SMTP_HOST=smtp.seu-provedor.com
-SMTP_PORT=587
-SMTP_USERNAME=seu_usuario
-SMTP_PASSWORD=sua_senha_de_aplicativo
-SMTP_FROM=seu_email@empresa.com
-SMTP_USE_TLS=true
+```bash
+npm run dev
 ```
 
-Para a demonstração local de e-mail:
+### E-mail de demonstração (opcional)
+
+Para capturar e consultar mensagens localmente, inicie o Mailpit com Docker:
 
 ```bash
 docker compose up -d mailpit
 ```
 
-Os e-mails de teste podem ser consultados em `http://localhost:8025`.
-
-### Configuração do Front-end (React)
-
-```bash
-npm install
-npm run dev
-```
-
-O painel fica disponível em `http://localhost:5173`.
+Consulte a caixa de entrada em <http://localhost:8025>. Sem Mailpit, Gemini ou credenciais SMTP, a análise de imagem usa o modo demonstrativo e o envio de e-mail externo não fica ativo.
 
 ### Funcionalidades Implementadas
 

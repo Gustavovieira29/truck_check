@@ -3,11 +3,17 @@ dist/
 build/
 .cache/
 .env*
+!.env.example
 .vite/
 vite.config.*.timestamp-*
 *.tsbuildinfo
 *-debug.log*
 logs/
 *.log
+__pycache__/
+*.py[cod]
+.venv/
+*.db
+backend/uploads/
 .claude-replay.*
 .tmp-*
