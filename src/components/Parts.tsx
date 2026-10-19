@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
-import { apiUrl } from '../config'
+import { apiFetch, apiUrl } from '../config'
 
 type Part = {
   id: number
@@ -24,7 +24,7 @@ export default function Parts() {
 
   const loadParts = async () => {
     try {
-      const response = await fetch(API_URL)
+      const response = await apiFetch(API_URL)
       if (!response.ok) throw new Error(`HTTP ${response.status}`)
       setParts(await response.json() as Part[])
     } catch (error) {
@@ -48,7 +48,7 @@ export default function Parts() {
     }
 
     try {
-      const response = await fetch(editingId ? `${API_URL}/${editingId}` : API_URL, {
+      const response = await apiFetch(editingId ? `${API_URL}/${editingId}` : API_URL, {
         method: editingId ? 'PUT' : 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ...form, code: form.code.trim().toUpperCase(), name: form.name.trim(), quantity, minimumQuantity, location: form.location.trim() || null }),
@@ -70,7 +70,7 @@ export default function Parts() {
 
   const deletePart = async (part: Part) => {
     try {
-      const response = await fetch(`${API_URL}/${part.id}`, { method: 'DELETE' })
+      const response = await apiFetch(`${API_URL}/${part.id}`, { method: 'DELETE' })
       if (!response.ok) throw new Error(`HTTP ${response.status}`)
       toast.success('Peça excluída', { description: part.name })
       void loadParts()

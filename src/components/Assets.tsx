@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
-import { apiUrl } from '../config'
+import { apiFetch, apiUrl } from '../config'
 import { ASSETS, type Asset, type AssetType, type StatusType } from '../data/mockData'
 
 const API_URL = apiUrl('/api/assets')
@@ -35,7 +35,7 @@ export default function Assets() {
 
     async function loadAssets() {
       try {
-        const response = await fetch(API_URL)
+        const response = await apiFetch(API_URL)
         if (!response.ok) {
           throw new Error('Falha ao carregar ativos')
         }
@@ -96,7 +96,7 @@ export default function Assets() {
     const method = isEditing ? 'PUT' : 'POST'
 
     try {
-      const response = await fetch(url, {
+      const response = await apiFetch(url, {
         method,
         headers: {
           'Content-Type': 'application/json',
@@ -139,7 +139,7 @@ export default function Assets() {
     }
 
     try {
-      const response = await fetch(`${API_URL}/${selected.id}`, {
+      const response = await apiFetch(`${API_URL}/${selected.id}`, {
         method: 'DELETE',
       })
 

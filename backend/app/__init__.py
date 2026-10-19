@@ -1,4 +1,4 @@
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 import logging
@@ -13,6 +13,7 @@ from backend.app.routes.inspections import router as inspections_router
 from backend.app.routes.maintenance import router as maintenance_router
 from backend.app.routes.parts import router as parts_router
 from backend.app.routes.reports import router as reports_router
+from backend.app.security import require_authenticated_user
 from backend.app.seed import seed_database
 
 
@@ -23,9 +24,12 @@ app.mount('/uploads', StaticFiles(directory=UPLOAD_DIR), name='uploads')
 
 logger = logging.getLogger('truck_check_api')
 
+cors_origins = [origin.strip() for origin in settings.cors_origins.split(',') if origin.strip()]
+cors_origins = [origin if '://' in origin else f'https://{origin}' for origin in cors_origins]
+
 app.add_middleware(
 	CORSMiddleware,
-	allow_origins=[origin.strip() for origin in settings.cors_origins.split(',') if origin.strip()],
+	allow_origins=cors_origins,
 	allow_credentials=True,
 	allow_methods=['*'],
 	allow_headers=['*'],
@@ -48,8 +52,8 @@ def health_check() -> dict[str, str]:
 
 
 app.include_router(auth_router, prefix='/api/auth', tags=['auth'])
-app.include_router(assets_router, prefix='/api/assets', tags=['assets'])
-app.include_router(maintenance_router, prefix='/api/maintenance', tags=['maintenance'])
-app.include_router(parts_router, prefix='/api/parts', tags=['parts'])
-app.include_router(inspections_router, prefix='/api/inspections', tags=['inspections'])
-app.include_router(reports_router, prefix='/api/reports', tags=['reports'])
+app.include_router(assets_router, prefix='/api/assets', tags=['assets'], dependencies=[Depends(require_authenticated_user)])
+app.include_router(maintenance_router, prefix='/api/maintenance', tags=['maintenance'], dependencies=[Depends(require_authenticated_user)])
+app.include_router(parts_router, prefix='/api/parts', tags=['parts'], dependencies=[Depends(require_authenticated_user)])
+app.include_router(inspections_router, prefix='/api/inspections', tags=['inspections'], dependencies=[Depends(require_authenticated_user)])
+app.include_router(reports_router, prefix='/api/reports', tags=['reports'], dependencies=[Depends(require_authenticated_user)])

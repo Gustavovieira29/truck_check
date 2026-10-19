@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
-import { apiUrl } from '../config'
+import { apiFetch, apiUrl } from '../config'
 import { ASSETS, MAINTENANCES, type Asset, type MaintenanceRecord } from '../data/mockData'
 
 const API_URL = apiUrl('/api/maintenance')
@@ -58,8 +58,8 @@ export default function Maintenance() {
     async function loadMaintenances() {
       try {
         const [response, assetsResponse] = await Promise.all([
-          fetch(API_URL),
-          fetch(apiUrl('/api/assets')),
+          apiFetch(API_URL),
+          apiFetch(apiUrl('/api/assets')),
         ])
         if (!response.ok || !assetsResponse.ok) {
           throw new Error(!response.ok ? await getApiError(response) : await getApiError(assetsResponse))
@@ -104,7 +104,7 @@ export default function Maintenance() {
 
   const handleCreateMaintenance = async (record: MaintenanceRecord) => {
     try {
-      const response = await fetch(API_URL, {
+      const response = await apiFetch(API_URL, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -145,7 +145,7 @@ export default function Maintenance() {
 
   const handleDeleteMaintenance = async (record: MaintenanceRecord) => {
     try {
-      const response = await fetch(`${API_URL}/${record.id}`, {
+      const response = await apiFetch(`${API_URL}/${record.id}`, {
         method: 'DELETE',
       })
 
@@ -167,7 +167,7 @@ export default function Maintenance() {
 
   const handleCompleteMaintenance = async (record: MaintenanceRecord) => {
     try {
-      const response = await fetch(`${API_URL}/${record.id}`, {
+      const response = await apiFetch(`${API_URL}/${record.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

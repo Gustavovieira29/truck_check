@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { jsPDF } from 'jspdf'
-import { apiUrl } from '../config'
+import { apiFetch, apiUrl } from '../config'
 import { INSPECTIONS, type InspectionReport } from '../data/mockData'
 
 type AIState = 'idle' | 'uploading' | 'analyzing' | 'done'
@@ -48,7 +48,7 @@ export default function PhotoInspection() {
   const inputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
-    Promise.all([fetch(INSPECTIONS_API), fetch(ASSETS_API)])
+    Promise.all([apiFetch(INSPECTIONS_API), apiFetch(ASSETS_API)])
       .then(async ([inspectionResponse, assetResponse]) => {
         if (!inspectionResponse.ok || !assetResponse.ok) throw new Error('A API não respondeu ao carregar os dados.')
         const [inspectionData, assetData] = await Promise.all([inspectionResponse.json(), assetResponse.json()])
@@ -84,7 +84,7 @@ export default function PhotoInspection() {
     setAnalysisImageUrl(null)
     setAiState('analyzing')
     try {
-      const response = await fetch(`${INSPECTIONS_API}/analyze`, {
+      const response = await apiFetch(`${INSPECTIONS_API}/analyze`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ image_data: imageData }),
@@ -131,7 +131,7 @@ export default function PhotoInspection() {
 
     setSaving(true)
     try {
-      const response = await fetch(INSPECTIONS_API, {
+      const response = await apiFetch(INSPECTIONS_API, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

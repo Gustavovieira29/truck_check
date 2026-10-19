@@ -6,7 +6,7 @@ from typing import Optional
 class Settings(BaseSettings):
     database_url: str = 'sqlite:///./truck_check.db'
     app_env: str = 'development'
-    cors_origins: str = 'http://localhost:4173,http://localhost:5173,http://localhost:8443'
+    cors_origins: str = 'http://localhost:4173,http://localhost:5173,http://localhost:8443,http://127.0.0.1:4173,http://127.0.0.1:5173,http://127.0.0.1:8443'
     smtp_host: Optional[str] = 'localhost'
     smtp_port: int = 1025
     smtp_username: Optional[str] = None
@@ -15,6 +15,7 @@ class Settings(BaseSettings):
     smtp_use_tls: bool = False
     admin_email: str = 'admin@truckcheck.com'
     admin_password: Optional[str] = None
+    auth_token_secret: Optional[str] = None
     gemini_api_key: Optional[str] = None
     gemini_model: str = 'gemini-2.0-flash'
     google_client_id: Optional[str] = None

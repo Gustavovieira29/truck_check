@@ -1,6 +1,6 @@
-from datetime import date
+﻿from datetime import date
 
-from backend.app.models import Asset, MaintenanceRecord
+from backend.app.models import Asset, InspectionReport, MaintenanceRecord
 
 
 def seed_database(db) -> None:
@@ -18,11 +18,34 @@ def seed_database(db) -> None:
     db.add_all([asset for asset in assets if asset.code not in known_codes])
     db.flush()
 
-    if not db.query(MaintenanceRecord).filter(MaintenanceRecord.asset_code == 'VEI-003').first():
-        hilux = db.query(Asset).filter(Asset.code == 'VEI-003').first()
-        if hilux:
-            db.add(MaintenanceRecord(asset_id=hilux.id, asset_name='Caminhonete Hilux', asset_code='VEI-003', type='preventive', description='Revisão 60.000 km', scheduled_date=date(2025, 7, 25), responsible='Lucas Ferreira', status='overdue', days_until=-10))
+    maintenances = [
+        ('VEI-003', 'preventive', 'Revisão 60.000 km — troca de óleo, filtros e correia dentada', date(2025, 7, 25), 'Lucas Ferreira', 'overdue', 'Toyota Center SP', None, -10),
+        ('FER-001', 'inspection', 'Renovação de laudo INMETRO e inspeção de segurança anual', date(2025, 8, 5), 'Marcio Santos', 'scheduled', 'Metrolab Certificações', 1200, 1),
+        ('VEI-002', 'preventive', 'Troca de filtro de ar, vela de ignição e fluido de freio', date(2025, 8, 8), 'Carla Mendes', 'scheduled', 'Oficina Central', 480, 4),
+        ('EQP-002', 'preventive', 'Troca de óleo motor, filtro e teste de carga completo', date(2025, 8, 12), 'Paulo Gomes', 'scheduled', None, 850, 8),
+        ('VEI-001', 'preventive', 'Revisão programada 50.000 km', date(2025, 8, 20), 'Roberto Alves', 'scheduled', 'Mercedes-Benz SP', 2100, 16),
+        ('EQP-001', 'preventive', 'Limpeza de filtros, troca de óleo e calibração de pressão', date(2025, 9, 1), 'Marcio Santos', 'scheduled', None, 320, 28),
+        ('FER-002', 'corrective', 'Substituição de conjunto de baterias tracionárias', date(2025, 7, 30), 'João Silva', 'in_progress', 'Yale Service', 4800, -5),
+        ('VEI-004', 'inspection', 'Vistoria DETRAN semestral e renovação de licença', date(2025, 10, 15), 'Ana Ribeiro', 'scheduled', None, 650, 72),
+    ]
+    assets_by_code = {a.code: a for a in db.query(Asset).all()}
+    known_maintenances = {(m.asset_code, m.scheduled_date) for m in db.query(MaintenanceRecord).all()}
+    for code, kind, description, scheduled, responsible, status, provider, cost, days in maintenances:
+        asset = assets_by_code.get(code)
+        if asset and (code, scheduled) not in known_maintenances:
+            db.add(MaintenanceRecord(asset_id=asset.id, asset_name=asset.name, asset_code=code, type=kind, description=description, scheduled_date=scheduled, responsible=responsible, status=status, provider=provider, cost=cost, days_until=days))
 
+    inspections = [
+        ('VEI-001', date(2025, 7, 15), 'Roberto Alves', 'https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=600&h=400&fit=crop&auto=format', 94, ['Pneus em boas condições', 'Faróis funcionando normalmente', 'Sem danos visíveis na carroceria', 'Espelhos retrovisores íntegros'], 'ok', True),
+        ('VEI-002', date(2025, 6, 10), 'Carla Mendes', 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=600&h=400&fit=crop&auto=format', 71, ['Arranhão leve no para-choque traseiro', 'Pneu dianteiro direito com desgaste acentuado', 'Vidro lateral com pequena trinca — monitorar', 'Carroceria sem danos estruturais'], 'warning', False),
+        ('FER-001', date(2025, 4, 10), 'Marcio Santos', 'https://images.unsplash.com/photo-1504307651254-35680f356dfd?w=600&h=400&fit=crop&auto=format', 58, ['Corrente com sinais de oxidação', 'Gancho com deformação leve detectada', 'Estrutura principal sem fraturas visíveis', 'Etiqueta de capacidade ilegível — substituir'], 'critical', False),
+    ]
+    known_inspections = {(i.asset_code, i.date) for i in db.query(InspectionReport).all()}
+    for code, day, inspector, image, score, findings, status, approved in inspections:
+        asset = assets_by_code.get(code)
+        if asset and (code, day) not in known_inspections:
+            db.add(InspectionReport(asset_id=asset.id, asset_name=asset.name, asset_code=code, date=day, inspector=inspector, image_url=image, ai_score=score, ai_findings='\n'.join(findings), ai_status=status, approved=approved))
+    db.flush()
     completed_asset_ids = {
         asset_id for (asset_id,) in db.query(MaintenanceRecord.asset_id)
         .filter(MaintenanceRecord.status == 'completed')

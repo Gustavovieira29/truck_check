@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { apiUrl } from './config'
+import { apiFetch, apiUrl } from './config'
 import Dashboard from './components/Dashboard'
 import Assets from './components/Assets'
 import Maintenance from './components/Maintenance'
@@ -34,6 +34,12 @@ export default function App() {
     const handleHashChange = () => setPage(pageFromHash())
     window.addEventListener('hashchange', handleHashChange)
     return () => window.removeEventListener('hashchange', handleHashChange)
+  }, [])
+
+  useEffect(() => {
+    const handleExpiredSession = () => setToken(null)
+    window.addEventListener('truck-check-auth-expired', handleExpiredSession)
+    return () => window.removeEventListener('truck-check-auth-expired', handleExpiredSession)
   }, [])
 
   const navigate = (nextPage: Page) => {

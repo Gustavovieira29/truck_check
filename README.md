@@ -104,6 +104,19 @@ O arquivo de exemplo configura SQLite local e credenciais apenas para demonstra�
 
 Essas credenciais são públicas e servem somente para desenvolvimento local. Altere `ADMIN_PASSWORD` em `backend/.env` antes de expor o projeto a outras pessoas ou à internet. O arquivo `.env` é local e não deve ser enviado ao Git.
 
+### Publicar no Render (demonstração gratuita)
+
+O arquivo [`render.yaml`](./render.yaml) configura o painel, a API e um banco PostgreSQL no Render:
+
+1. Envie este projeto para um repositório GitHub.
+2. No Render, crie um **Blueprint** e conecte o repositório.
+3. Na primeira configuração, informe `ADMIN_EMAIL` e defina uma senha forte em `ADMIN_PASSWORD`. O Render gera `AUTH_TOKEN_SECRET` automaticamente.
+4. Confirme a criação dos serviços e aguarde a publicação. Use a URL pública de `truck-check-web` para acessar o sistema de qualquer lugar.
+
+O login é uma conta compartilhada definida pelas variáveis do backend. A API exige o token emitido após o login. Use uma senha diferente das credenciais locais e não publique segredos no Git.
+
+**Limitações do plano gratuito:** os serviços podem hibernar quando não usados, o PostgreSQL gratuito expira após 30 dias e arquivos de fotos ficam em armazenamento temporário. Use apenas para demonstração; para operação contínua, contrate armazenamento persistente e faça backup dos dados.
+
 ### macOS e Linux
 
 Use os mesmos comandos de clone. Para preparar o ambiente, execute:
