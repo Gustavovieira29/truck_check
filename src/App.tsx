@@ -11,6 +11,18 @@ import Users from './components/Users'
 type Page = 'dashboard' | 'assets' | 'maintenance' | 'parts' | 'inspection' | 'reports' | 'users'
 
 const AUTH_TOKEN_KEY = 'truck-check-token'
+const LOGIN_AT_KEY = 'truck-check-login-at'
+const RELOAD_WINDOW_MS = 5 * 60 * 1000
+
+// Recarregar a página só mantém a sessão por 5 minutos após o login.
+function restoreToken(): string | null {
+  const token = window.localStorage.getItem(AUTH_TOKEN_KEY)
+  const loginAt = Number(window.localStorage.getItem(LOGIN_AT_KEY))
+  if (token && loginAt && Date.now() - loginAt <= RELOAD_WINDOW_MS) return token
+  window.localStorage.removeItem(AUTH_TOKEN_KEY)
+  window.localStorage.removeItem(LOGIN_AT_KEY)
+  return null
+}
 
 const NAV = [
   { id: 'dashboard' as Page, icon: GridIcon, label: 'Dashboard' },
@@ -28,7 +40,7 @@ function pageFromHash(): Page {
 }
 
 export default function App() {
-  const [token, setToken] = useState(() => window.localStorage.getItem(AUTH_TOKEN_KEY))
+  const [token, setToken] = useState(restoreToken)
   const [page, setPage] = useState<Page>(pageFromHash)
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [isMaster, setIsMaster] = useState(false)
@@ -61,6 +73,7 @@ export default function App() {
 
   const handleLogin = (value: string) => {
     window.localStorage.setItem(AUTH_TOKEN_KEY, value)
+    window.localStorage.setItem(LOGIN_AT_KEY, String(Date.now()))
     setToken(value)
   }
 
@@ -198,7 +211,7 @@ export default function App() {
             <button
               className="btn btn-ghost"
               type="button"
-              onClick={() => { window.localStorage.removeItem(AUTH_TOKEN_KEY); setToken(null) }}
+              onClick={() => { window.localStorage.removeItem(AUTH_TOKEN_KEY); window.localStorage.removeItem(LOGIN_AT_KEY); setToken(null) }}
             >
               Sair
             </button>
@@ -386,5 +399,6 @@ function ChevronIcon({ dir }: { dir: 'left' | 'right' }) {
     </svg>
   )
 }
+
 
 
