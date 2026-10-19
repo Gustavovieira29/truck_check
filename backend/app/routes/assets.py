@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from backend.app.database import get_db
-from backend.app.models import Asset
+from backend.app.models import Asset, Part
 from backend.app.schemas import AssetCreate, AssetResponse
 
 router = APIRouter()
@@ -53,6 +53,11 @@ def delete_asset(asset_id: int, db: Session = Depends(get_db)):
     asset = db.query(Asset).filter(Asset.id == asset_id).first()
     if not asset:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Asset not found')
+
+    for record in [*asset.maintenance_records, *asset.inspections]:
+        db.delete(record)
+    for part in db.query(Part).filter(Part.asset_id == asset.id).all():
+        part.asset_id = None
 
     db.delete(asset)
     db.commit()

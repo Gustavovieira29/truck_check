@@ -144,7 +144,7 @@ export default function Assets() {
       })
 
       if (!response.ok) {
-        throw new Error('Falha ao excluir veículo')
+        throw new Error(response.status === 404 ? 'Este ativo já não existe no banco. Atualize a página.' : `A API respondeu com HTTP ${response.status}.`)
       }
 
       setAssets(current => current.filter(item => item.id !== selected.id))
@@ -152,9 +152,9 @@ export default function Assets() {
         description: `${selected.code} · ${selected.name}`,
       })
       setSelected(null)
-    } catch {
+    } catch (error) {
       toast.error('Falha ao excluir veículo', {
-        description: 'Verifique se a API está rodando em 127.0.0.1:8000.',
+        description: error instanceof Error ? error.message : 'Erro inesperado.',
       })
     }
   }
