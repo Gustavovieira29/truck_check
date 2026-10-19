@@ -25,6 +25,7 @@ app.mount('/uploads', StaticFiles(directory=UPLOAD_DIR), name='uploads')
 logger = logging.getLogger('truck_check_api')
 
 cors_origins = [origin.strip() for origin in settings.cors_origins.split(',') if origin.strip()]
+cors_origins = [origin if '.' in origin or origin.startswith('http') else f'{origin}.onrender.com' for origin in cors_origins]
 cors_origins = [origin if '://' in origin else f'https://{origin}' for origin in cors_origins]
 
 app.add_middleware(

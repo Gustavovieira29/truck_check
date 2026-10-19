@@ -1,5 +1,7 @@
 const configuredApiBase = (import.meta.env.VITE_API_BASE_URL as string | undefined) || 'http://127.0.0.1:8000'
-export const API_BASE_URL = /^https?:\/\//i.test(configuredApiBase) ? configuredApiBase : `https://${configuredApiBase}`
+// O Render pode entregar só o nome do serviço (sem domínio).
+const withDomain = /^https?:\/\//i.test(configuredApiBase) || configuredApiBase.includes('.') ? configuredApiBase : `${configuredApiBase}.onrender.com`
+export const API_BASE_URL = /^https?:\/\//i.test(withDomain) ? withDomain : `https://${withDomain}`
 
 export function apiUrl(path: string) {
   const normalizedPath = path.startsWith('/') ? path : `/${path}`
