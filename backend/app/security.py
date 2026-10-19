@@ -1,7 +1,8 @@
-import base64
+﻿import base64
 import hashlib
 import hmac
 import json
+import os
 import time
 
 from fastapi import Depends, HTTPException, status
@@ -29,9 +30,9 @@ def _signing_secret() -> bytes:
     return secret.encode('utf-8')
 
 
-def create_access_token() -> str:
+def create_access_token(subject: str = 'admin') -> str:
     payload = _encode(json.dumps(
-        {'sub': 'admin', 'exp': int(time.time()) + _TOKEN_LIFETIME_SECONDS},
+        {'sub': subject, 'exp': int(time.time()) + _TOKEN_LIFETIME_SECONDS},
         separators=(',', ':'),
     ).encode('utf-8'))
     signature = _encode(hmac.new(_signing_secret(), payload.encode('ascii'), hashlib.sha256).digest())
@@ -60,7 +61,7 @@ def require_authenticated_user(
 
         padded_payload = payload_part + '=' * (-len(payload_part) % 4)
         payload = json.loads(base64.urlsafe_b64decode(padded_payload))
-        if payload.get('sub') != 'admin' or int(payload.get('exp', 0)) <= int(time.time()):
+        if not payload.get('sub') or int(payload.get('exp', 0)) <= int(time.time()):
             raise ValueError('Expired or invalid token')
     except (ValueError, TypeError, UnicodeError, json.JSONDecodeError):
         raise HTTPException(
@@ -69,4 +70,29 @@ def require_authenticated_user(
             headers={'WWW-Authenticate': 'Bearer'},
         ) from None
 
-    return 'admin'
+    return str(payload['sub'])
+
+def hash_password(password: str) -> str:
+    salt = os.urandom(16)
+    digest = hashlib.scrypt(password.encode('utf-8'), salt=salt, n=2**14, r=8, p=1)
+    return '$'.join(['scrypt', _encode(salt), _encode(digest)])
+
+
+def verify_password(password: str, stored: str) -> bool:
+    try:
+        scheme, salt_part, digest_part = stored.split('$')
+        if scheme != 'scrypt':
+            return False
+        salt = base64.urlsafe_b64decode(salt_part + '=' * (-len(salt_part) % 4))
+        expected = base64.urlsafe_b64decode(digest_part + '=' * (-len(digest_part) % 4))
+        actual = hashlib.scrypt(password.encode('utf-8'), salt=salt, n=2**14, r=8, p=1)
+        return hmac.compare_digest(actual, expected)
+    except (ValueError, TypeError):
+        return False
+
+def optional_authenticated_user(
+    credentials: HTTPAuthorizationCredentials | None = Depends(_bearer_scheme),
+) -> str | None:
+    if credentials is None:
+        return None
+    return require_authenticated_user(credentials)

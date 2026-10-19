@@ -1,4 +1,6 @@
-from sqlalchemy import Boolean, Column, Date, Float, ForeignKey, Integer, String, Text
+﻿from sqlalchemy import Boolean, Column, Date, DateTime, Float, ForeignKey, Integer, String, Text
+from datetime import datetime
+
 from sqlalchemy.orm import relationship
 
 from backend.app.database import Base
@@ -94,3 +96,14 @@ class Part(Base):
     asset_id = Column(Integer, ForeignKey('assets.id'), nullable=True)
 
     asset = relationship('Asset')
+
+class Usuario(Base):
+    __tablename__ = 'usuarios'
+
+    id = Column(Integer, primary_key=True, index=True)
+    nome = Column(String, nullable=False)
+    email = Column(String, unique=True, index=True, nullable=False)
+    senha_hash = Column(String, nullable=False)
+    perfil = Column(String, nullable=False, default='master')
+    ativo = Column(Boolean, nullable=False, default=True)
+    criado_em = Column(DateTime, nullable=False, default=datetime.utcnow)

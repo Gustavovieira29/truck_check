@@ -1,4 +1,4 @@
-from datetime import date
+﻿from datetime import date
 from typing import Optional, List
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -154,3 +154,14 @@ class LoginRequest(BaseModel):
 class LoginResponse(BaseModel):
     token: str
     user: str
+
+
+class MasterCreate(BaseModel):
+    nome: str
+    email: str
+    password: str
+
+
+class AuthStatus(BaseModel):
+    masterExists: bool
+
