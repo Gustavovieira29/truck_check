@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react'
+﻿import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import { apiFetch, apiUrl } from '../config'
-import { ASSETS, MAINTENANCES, type Asset, type MaintenanceRecord } from '../data/mockData'
+import type { Asset, MaintenanceRecord } from '../types'
 
 const API_URL = apiUrl('/api/maintenance')
 
@@ -48,8 +48,8 @@ const TYPE_MAP: Record<MaintenanceRecord['type'], string> = {
 export default function Maintenance() {
   const [statusFilter, setStatusFilter] = useState<MaintenanceRecord['status'] | 'all'>('all')
   const [showModal, setShowModal] = useState(false)
-  const [maintenances, setMaintenances] = useState(MAINTENANCES)
-  const [assets, setAssets] = useState<Asset[]>(ASSETS)
+  const [maintenances, setMaintenances] = useState<MaintenanceRecord[]>([])
+  const [assets, setAssets] = useState<Asset[]>([])
   const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
@@ -569,3 +569,4 @@ function ModalField({ label, children }: { label: string; children: React.ReactN
     </div>
   )
 }
+

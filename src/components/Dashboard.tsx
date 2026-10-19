@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react'
+﻿import { useEffect, useState } from 'react'
 import { apiFetch, apiUrl } from '../config'
-import { ASSETS, INSPECTIONS, MAINTENANCES, type Asset, type InspectionReport, type MaintenanceRecord } from '../data/mockData'
+import type { Asset, InspectionReport, MaintenanceRecord } from '../types'
 
 type Page = 'dashboard' | 'assets' | 'maintenance' | 'inspection' | 'reports'
 
@@ -17,9 +17,9 @@ const STATUS_LABELS: Record<string, string> = {
 }
 
 export default function Dashboard({ onNavigate }: Props) {
-  const [assets, setAssets] = useState<Asset[]>(ASSETS)
-  const [maintenances, setMaintenances] = useState<MaintenanceRecord[]>(MAINTENANCES)
-  const [inspections, setInspections] = useState<InspectionReport[]>(INSPECTIONS)
+  const [assets, setAssets] = useState<Asset[]>([])
+  const [maintenances, setMaintenances] = useState<MaintenanceRecord[]>([])
+  const [inspections, setInspections] = useState<InspectionReport[]>([])
   const [search, setSearch] = useState('')
 
   useEffect(() => {
@@ -267,3 +267,4 @@ function ScoreRing({ score, status }: { score: number; status: string }) {
     </div>
   )
 }
+

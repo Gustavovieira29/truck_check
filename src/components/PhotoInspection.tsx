@@ -1,8 +1,8 @@
-import { useEffect, useRef, useState } from 'react'
+﻿import { useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { jsPDF } from 'jspdf'
 import { apiFetch, apiUrl } from '../config'
-import { INSPECTIONS, type InspectionReport } from '../data/mockData'
+import type { InspectionReport } from '../types'
 
 type AIState = 'idle' | 'uploading' | 'analyzing' | 'done'
 
@@ -36,7 +36,7 @@ const MOCK_ANALYSIS: Omit<InspectionReport, 'id' | 'assetId' | 'assetName' | 'as
 
 export default function PhotoInspection() {
   const [selected, setSelected] = useState<InspectionReport | null>(null)
-  const [inspections, setInspections] = useState<InspectionReport[]>(INSPECTIONS)
+  const [inspections, setInspections] = useState<InspectionReport[]>([])
   const [assets, setAssets] = useState<ApiAsset[]>([])
   const [aiState, setAiState] = useState<AIState>('idle')
   const [preview, setPreview] = useState<string | null>(null)
@@ -432,3 +432,4 @@ function ScanAnimation() {
 function scoreColor(score: number) {
   return score >= 85 ? 'var(--status-ok)' : score >= 65 ? 'var(--status-warning)' : 'var(--status-critical)'
 }
+

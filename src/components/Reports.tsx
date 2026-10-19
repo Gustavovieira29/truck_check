@@ -1,27 +1,21 @@
-import { useState } from 'react'
+﻿import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import { jsPDF } from 'jspdf'
 import { apiFetch, apiUrl } from '../config'
-import { ASSETS, MAINTENANCES } from '../data/mockData'
+import type { Asset, MaintenanceRecord } from '../types'
 
 type Period = 'daily' | 'weekly' | 'monthly'
 type ReportType = 'full' | 'critical' | 'maintenance' | 'inspection'
 
-interface ScheduledReport {
-  id: string
+interface ReportHistoryItem {
+  id: number
   type: ReportType
   period: Period
   recipients: string[]
-  lastSent: string
-  nextSend: string
-  active: boolean
+  status: string
+  generatedAt: string
+  sentAt?: string | null
 }
-
-const SCHEDULED: ScheduledReport[] = [
-  { id: 'r1', type: 'critical', period: 'daily', recipients: ['diretoria@empresa.com', 'segurança@empresa.com'], lastSent: '2025-08-03', nextSend: '2025-08-04', active: true },
-  { id: 'r2', type: 'full', period: 'weekly', recipients: ['gestão@empresa.com'], lastSent: '2025-07-28', nextSend: '2025-08-04', active: true },
-  { id: 'r3', type: 'maintenance', period: 'monthly', recipients: ['manutenção@empresa.com', 'compras@empresa.com'], lastSent: '2025-07-01', nextSend: '2025-08-01', active: false },
-]
 
 const TYPE_LABELS: Record<ReportType, string> = {
   full: 'Relatório Completo',
@@ -55,14 +49,32 @@ export default function Reports() {
   const [period, setPeriod] = useState<Period>('monthly')
   const [generating, setGenerating] = useState(false)
   const [generated, setGenerated] = useState(false)
-  const [schedules, setSchedules] = useState(SCHEDULED)
+  const [history, setHistory] = useState<ReportHistoryItem[]>([])
+  const [assets, setAssets] = useState<Asset[]>([])
+  const [maintenances, setMaintenances] = useState<MaintenanceRecord[]>([])
+
+  const loadHistory = () => apiFetch(apiUrl('/api/reports'))
+    .then(response => response.ok ? response.json() as Promise<ReportHistoryItem[]> : Promise.reject(new Error('Falha ao carregar histórico')))
+    .then(items => setHistory([...items].reverse()))
+    .catch(() => toast.error('Não foi possível carregar o histórico de relatórios'))
+
+  useEffect(() => {
+    void loadHistory()
+    Promise.all([apiFetch(apiUrl('/api/assets')), apiFetch(apiUrl('/api/maintenance'))])
+      .then(async ([assetsResponse, maintenanceResponse]) => {
+        if (!assetsResponse.ok || !maintenanceResponse.ok) throw new Error('Falha ao carregar dados')
+        setAssets(await assetsResponse.json() as Asset[])
+        setMaintenances(await maintenanceResponse.json() as MaintenanceRecord[])
+      })
+      .catch(() => toast.error('Não foi possível carregar os dados dos relatórios'))
+  }, [])
   const [startDate, setStartDate] = useState('2025-07-01')
   const [endDate, setEndDate] = useState('2025-08-04')
   const [recipient, setRecipient] = useState('')
 
-  const overdue = ASSETS.filter(a => a.status === 'overdue' || a.status === 'critical').length
-  const overdueMaints = MAINTENANCES.filter(m => m.status === 'overdue').length
-  const totalCost = MAINTENANCES.filter(m => m.cost).reduce((acc, m) => acc + (m.cost || 0), 0)
+  const overdue = assets.filter(a => a.status === 'overdue' || a.status === 'critical').length
+  const overdueMaints = maintenances.filter(m => m.status === 'overdue').length
+  const totalCost = maintenances.filter(m => m.cost).reduce((acc, m) => acc + (m.cost || 0), 0)
 
   const handleGenerate = async () => {
     if (!startDate || !endDate || endDate < startDate) {
@@ -114,16 +126,12 @@ export default function Reports() {
     }
   }
 
-  const toggleSchedule = (id: string) => {
-    setSchedules(s => s.map(r => r.id === id ? { ...r, active: !r.active } : r))
-  }
-
-  const sendScheduledReport = (schedule: ScheduledReport) => {
-    setReportType(schedule.type)
-    setPeriod(schedule.period)
-    setRecipient(schedule.recipients[0] ?? '')
+  const reuseReport = (item: ReportHistoryItem) => {
+    setReportType(item.type)
+    setPeriod(item.period)
+    setRecipient(item.recipients[0] ?? '')
     setActiveTab('generate')
-    toast.info('Agendamento carregado', { description: 'Revise os dados e confirme o envio do relatório.' })
+    toast.info('Relatório carregado', { description: 'Revise os dados e confirme o envio do relatório.' })
   }
 
   const handleDownloadPdf = () => {
@@ -142,7 +150,7 @@ export default function Reports() {
     document.setFontSize(13)
     document.text('Resumo operacional', 20, 65)
     document.setFontSize(11)
-    document.text(`Total de ativos: ${ASSETS.length}`, 20, 75)
+    document.text(`Total de ativos: ${assets.length}`, 20, 75)
     document.text(`Ativos críticos ou vencidos: ${overdue}`, 20, 83)
     document.text(`Manutenções vencidas: ${overdueMaints}`, 20, 91)
     document.text(`Custo previsto: R$ ${totalCost.toLocaleString('pt-BR')}`, 20, 99)
@@ -280,7 +288,7 @@ export default function Reports() {
 
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, marginBottom: 24 }}>
                       {[
-                        { label: 'Total de Ativos', value: ASSETS.length, color: '#0f172a' },
+                        { label: 'Total de Ativos', value: assets.length, color: '#0f172a' },
                         { label: 'Críticos/Vencidos', value: overdue, color: '#dc2626' },
                         { label: 'Manut. Vencidas', value: overdueMaints, color: '#d97706' },
                       ].map(s => (
@@ -302,7 +310,7 @@ export default function Reports() {
                           </tr>
                         </thead>
                         <tbody>
-                          {ASSETS.slice(0, 5).map(a => (
+                          {assets.slice(0, 5).map(a => (
                             <tr key={a.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
                               <td style={{ padding: '7px 8px', fontFamily: 'monospace', fontSize: 11, color: '#475569' }}>{a.code}</td>
                               <td style={{ padding: '7px 8px', fontWeight: 500, color: '#0f172a' }}>{a.name.substring(0, 22)}</td>
@@ -353,69 +361,45 @@ export default function Reports() {
                   <th>Tipo</th>
                   <th>Periodicidade</th>
                   <th>Destinatários</th>
-                  <th>Último envio</th>
-                  <th>Próximo envio</th>
+                  <th>Gerado em</th>
+                  <th>Enviado em</th>
                   <th>Status</th>
                   <th>Ações</th>
                 </tr>
               </thead>
               <tbody>
-                {schedules.map(s => (
+                {history.length === 0 ? (
+                  <tr><td colSpan={7} style={{ padding: 24, textAlign: 'center', color: 'var(--muted-foreground)' }}>Nenhum relatório gerado ainda.</td></tr>
+                ) : history.map(s => (
                   <tr key={s.id}>
+                    <td><span style={{ fontSize: 13, fontWeight: 500, color: 'var(--foreground)' }}>{TYPE_LABELS[s.type] ?? s.type}</span></td>
                     <td>
-                      <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--foreground)' }}>{TYPE_LABELS[s.type]}</span>
-                    </td>
-                    <td>
-                      <span style={{
-                        fontSize: 11, padding: '3px 8px', borderRadius: 2, fontWeight: 500,
-                        background: 'var(--secondary)', color: 'var(--secondary-foreground)', border: '1px solid var(--border)',
-                      }}>
-                        {PERIOD_LABELS[s.period]}
+                      <span style={{ fontSize: 11, padding: '3px 8px', borderRadius: 2, fontWeight: 500, background: 'var(--secondary)', color: 'var(--secondary-foreground)', border: '1px solid var(--border)' }}>
+                        {PERIOD_LABELS[s.period] ?? s.period}
                       </span>
                     </td>
                     <td>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                        {s.recipients.map(r => (
+                        {s.recipients.length === 0 ? <span style={{ fontSize: 11, color: 'var(--muted-foreground)' }}>-</span> : s.recipients.map(r => (
                           <span key={r} className="font-mono" style={{ fontSize: 11, color: 'var(--muted-foreground)' }}>{r}</span>
                         ))}
                       </div>
                     </td>
+                    <td><span className="font-mono" style={{ fontSize: 12, color: 'var(--foreground)' }}>{new Date(`${s.generatedAt}T00:00:00`).toLocaleDateString('pt-BR')}</span></td>
+                    <td><span className="font-mono" style={{ fontSize: 12, color: 'var(--foreground)' }}>{s.sentAt ? new Date(`${s.sentAt}T00:00:00`).toLocaleDateString('pt-BR') : '-'}</span></td>
                     <td>
-                      <span className="font-mono" style={{ fontSize: 12, color: 'var(--foreground)' }}>
-                        {new Date(s.lastSent).toLocaleDateString('pt-BR')}
+                      <span className={s.status === 'sent' ? 'badge-ok' : 'badge-inactive'} style={{ fontSize: 10, padding: '3px 8px', borderRadius: 2, fontWeight: 500 }}>
+                        {s.status === 'sent' ? 'Enviado' : 'Gerado'}
                       </span>
                     </td>
                     <td>
-                      <span className="font-mono" style={{ fontSize: 12, color: 'var(--foreground)' }}>
-                        {new Date(s.nextSend).toLocaleDateString('pt-BR')}
-                      </span>
-                    </td>
-                    <td>
-                      <span className={s.active ? 'badge-ok' : 'badge-inactive'} style={{ fontSize: 10, padding: '3px 8px', borderRadius: 2, fontWeight: 500 }}>
-                        {s.active ? 'Ativo' : 'Pausado'}
-                      </span>
-                    </td>
-                    <td>
-                      <div style={{ display: 'flex', gap: 6 }}>
-                        <button
-                          className="btn btn-ghost"
-                          style={{ padding: '4px 10px', fontSize: 11 }}
-                          onClick={() => {
-                            toggleSchedule(s.id)
-                            toast.success(s.active ? 'Agendamento pausado' : 'Agendamento ativado')
-                          }}
-                        >
-                          {s.active ? 'Pausar' : 'Ativar'}
-                        </button>
-                        <button className="btn btn-ghost" style={{ padding: '4px 10px', fontSize: 11 }} onClick={() => sendScheduledReport(s)}>
-                          ✉ Enviar agora
-                        </button>
-                      </div>
+                      <button className="btn btn-ghost" style={{ padding: '4px 10px', fontSize: 11 }} onClick={() => reuseReport(s)}>
+                        ✉ Gerar novamente
+                      </button>
                     </td>
                   </tr>
                 ))}
-              </tbody>
-            </table>
+              </tbody>            </table>
           </div>
 
           {/* Email config info */}
@@ -444,3 +428,5 @@ const inputSt: React.CSSProperties = {
   fontSize: 13,
   outline: 'none',
 }
+
+

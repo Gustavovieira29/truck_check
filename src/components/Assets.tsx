@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react'
+﻿import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import { apiFetch, apiUrl } from '../config'
-import { ASSETS, type Asset, type AssetType, type StatusType } from '../data/mockData'
+import type { Asset, AssetType, StatusType } from '../types'
 
 const API_URL = apiUrl('/api/assets')
 
@@ -20,7 +20,7 @@ const TYPE_LABELS: Record<AssetType, string> = {
 }
 
 export default function Assets() {
-  const [assets, setAssets] = useState<Asset[]>(ASSETS)
+  const [assets, setAssets] = useState<Asset[]>([])
   const [search, setSearch] = useState('')
   const [typeFilter, setTypeFilter] = useState<AssetType | 'all'>('all')
   const [statusFilter, setStatusFilter] = useState<StatusType | 'all'>('all')
@@ -46,7 +46,7 @@ export default function Assets() {
         }
       } catch {
         toast.error('Não foi possível carregar os ativos da API', {
-          description: 'Usando dados locais temporariamente. Verifique se a API está ativa.',
+          description: 'Verifique se a API está ativa.',
         })
       } finally {
         if (isMounted) {
@@ -625,3 +625,4 @@ function DetailRow({ label, value, mono, valueColor }: { label: string; value: s
     </div>
   )
 }
+
