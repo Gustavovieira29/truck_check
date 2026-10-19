@@ -165,3 +165,26 @@ class MasterCreate(BaseModel):
 class AuthStatus(BaseModel):
     masterExists: bool
 
+
+
+class UsuarioCreate(BaseModel):
+    nome: str
+    email: str
+    password: str
+    perfil: str = 'usuario'
+
+
+class UsuarioResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    nome: str
+    email: str
+    perfil: str
+    ativo: bool
+
+
+class UsuarioMe(BaseModel):
+    nome: str
+    email: str
+    perfil: str

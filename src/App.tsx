@@ -6,8 +6,9 @@ import Maintenance from './components/Maintenance'
 import PhotoInspection from './components/PhotoInspection'
 import Parts from './components/Parts'
 import Reports from './components/Reports'
+import Users from './components/Users'
 
-type Page = 'dashboard' | 'assets' | 'maintenance' | 'parts' | 'inspection' | 'reports'
+type Page = 'dashboard' | 'assets' | 'maintenance' | 'parts' | 'inspection' | 'reports' | 'users'
 
 const AUTH_TOKEN_KEY = 'truck-check-token'
 
@@ -18,6 +19,7 @@ const NAV = [
   { id: 'parts' as Page, icon: BoxIcon, label: 'Peças e Insumos' },
   { id: 'inspection' as Page, icon: CameraIcon, label: 'Inspeção por Foto' },
   { id: 'reports' as Page, icon: FileIcon, label: 'Relatórios' },
+  { id: 'users' as Page, icon: UsersIcon, label: 'Usuários' },
 ]
 
 function pageFromHash(): Page {
@@ -29,6 +31,7 @@ export default function App() {
   const [token, setToken] = useState(() => window.localStorage.getItem(AUTH_TOKEN_KEY))
   const [page, setPage] = useState<Page>(pageFromHash)
   const [sidebarOpen, setSidebarOpen] = useState(true)
+  const [isMaster, setIsMaster] = useState(false)
 
   useEffect(() => {
     const handleHashChange = () => setPage(pageFromHash())
@@ -41,6 +44,16 @@ export default function App() {
     window.addEventListener('truck-check-auth-expired', handleExpiredSession)
     return () => window.removeEventListener('truck-check-auth-expired', handleExpiredSession)
   }, [])
+
+  useEffect(() => {
+    if (!token) { setIsMaster(false); return }
+    apiFetch(apiUrl('/api/usuarios/me'))
+      .then(response => response.json() as Promise<{ perfil?: string }>)
+      .then(result => setIsMaster(result.perfil === 'master'))
+      .catch(() => setIsMaster(false))
+  }, [token])
+
+  const visibleNav = NAV.filter(item => item.id !== 'users' || isMaster)
 
   const navigate = (nextPage: Page) => {
     window.location.hash = nextPage
@@ -109,7 +122,7 @@ export default function App() {
 
         {/* Nav */}
         <nav style={{ padding: '12px 8px', flex: 1, display: 'flex', flexDirection: 'column', gap: 2 }}>
-          {NAV.map(({ id, icon: Icon, label }) => (
+          {visibleNav.map(({ id, icon: Icon, label }) => (
             <button
               key={id}
               onClick={() => navigate(id)}
@@ -200,6 +213,7 @@ export default function App() {
           {page === 'parts' && <Parts />}
           {page === 'inspection' && <PhotoInspection />}
           {page === 'reports' && <Reports />}
+          {page === 'users' && isMaster && <Users />}
         </main>
       </div>
     </div>
@@ -328,6 +342,9 @@ function WrenchIcon({ size = 16 }: { size?: number }) {
     </svg>
   )
 }
+function UsersIcon({ size = 16 }: { size?: number }) {
+  return <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth={1.5}><circle cx="6" cy="5" r="2.5" /><path d="M1.5 14c0-2.5 2-4.5 4.5-4.5s4.5 2 4.5 4.5M11 3.2a2.5 2.5 0 010 4.6M12.5 9.8c1.2.6 2 1.9 2 4.2" /></svg>
+}
 function BoxIcon({ size = 16 }: { size?: number }) {
   return <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth={1.5}><path d="M2 5.5L8 2l6 3.5v7L8 16l-6-3.5v-7z" /><path d="M2 5.5L8 9l6-3.5M8 9v7" /></svg>
 }
@@ -369,4 +386,5 @@ function ChevronIcon({ dir }: { dir: 'left' | 'right' }) {
     </svg>
   )
 }
+
 
