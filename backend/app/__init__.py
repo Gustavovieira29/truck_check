@@ -1,4 +1,4 @@
-﻿from fastapi import Depends, FastAPI
+from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 import logging
@@ -6,7 +6,6 @@ from pathlib import Path
 
 from backend.app.config import settings
 from backend.app.database import Base, engine
-from backend.app.database import SessionLocal
 from backend.app.routes.assets import router as assets_router
 from backend.app.routes.auth import router as auth_router
 from backend.app.routes.inspections import router as inspections_router
@@ -15,7 +14,6 @@ from backend.app.routes.parts import router as parts_router
 from backend.app.routes.reports import router as reports_router
 from backend.app.routes.users import router as users_router
 from backend.app.security import require_authenticated_user
-from backend.app.seed import seed_database
 
 
 app = FastAPI(title='Truck Check API', version='1.0.0')
@@ -42,8 +40,6 @@ app.add_middleware(
 def startup_event() -> None:
 	try:
 		Base.metadata.create_all(bind=engine)
-		with SessionLocal() as db:
-			seed_database(db)
 	except Exception as exc:  # pragma: no cover - protects local demo startup
 		logger.warning('Database initialization failed; continuing with app startup. Error: %s', exc)
 
