@@ -7,8 +7,9 @@ import PhotoInspection from './components/PhotoInspection'
 import Parts from './components/Parts'
 import Reports from './components/Reports'
 import Users from './components/Users'
+import Security from './components/Security'
 
-type Page = 'dashboard' | 'assets' | 'maintenance' | 'parts' | 'inspection' | 'reports' | 'users'
+type Page = 'dashboard' | 'assets' | 'maintenance' | 'parts' | 'inspection' | 'reports' | 'users' | 'security'
 
 const AUTH_TOKEN_KEY = 'truck-check-token'
 const LOGIN_AT_KEY = 'truck-check-login-at'
@@ -32,6 +33,7 @@ const NAV = [
   { id: 'inspection' as Page, icon: CameraIcon, label: 'Inspeção por Foto' },
   { id: 'reports' as Page, icon: FileIcon, label: 'Relatórios' },
   { id: 'users' as Page, icon: UsersIcon, label: 'Usuários' },
+  { id: 'security' as Page, icon: FileIcon, label: 'Segurança' },
 ]
 
 function pageFromHash(): Page {
@@ -211,7 +213,12 @@ export default function App() {
             <button
               className="btn btn-ghost"
               type="button"
-              onClick={() => { window.localStorage.removeItem(AUTH_TOKEN_KEY); window.localStorage.removeItem(LOGIN_AT_KEY); setToken(null) }}
+              onClick={() => {
+                void apiFetch(apiUrl('/api/auth/logout'), { method: 'POST' }).catch(() => undefined)
+                window.localStorage.removeItem(AUTH_TOKEN_KEY)
+                window.localStorage.removeItem(LOGIN_AT_KEY)
+                setToken(null)
+              }}
             >
               Sair
             </button>
@@ -227,6 +234,7 @@ export default function App() {
           {page === 'inspection' && <PhotoInspection />}
           {page === 'reports' && <Reports />}
           {page === 'users' && isMaster && <Users />}
+          {page === 'security' && <Security isMaster={isMaster} />}
         </main>
       </div>
     </div>
@@ -239,9 +247,8 @@ function Login({ onLogin }: { onLogin: (token: string) => void }) {
   const [nome, setNome] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [error, setError] = useState('')
-  const [loading, setLoading] = useState(false)
-  const isMaster = mode === 'master'
+  const [code, setCode] = useState('')
+  const [needsCode, setNeedsCode] = useState(false)
 
   useEffect(() => {
     fetch(apiUrl('/api/auth/status'))
@@ -263,9 +270,14 @@ function Login({ onLogin }: { onLogin: (token: string) => void }) {
       const response = await fetch(apiUrl(isMaster ? '/api/auth/master' : '/api/auth/login'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(isMaster ? { nome, email, password } : { email, password }),
+        body: JSON.stringify(isMaster ? { nome, email, password } : { email, password, code: needsCode ? code : undefined }),
       })
       const result = await response.json() as { token?: string; user?: string; detail?: string | { msg: string }[] }
+      if (response.status === 428 && result.detail === 'CODIGO_2FA_NECESSARIO') {
+        setNeedsCode(true)
+        setError('Informe o código de 6 dígitos do seu aplicativo autenticador.')
+        return
+      }
       if (!response.ok || !result.token || result.user === 'guest') {
         const detail = Array.isArray(result.detail) ? result.detail[0]?.msg : result.detail
         throw new Error(detail || 'E-mail ou senha inválidos.')
@@ -293,6 +305,12 @@ function Login({ onLogin }: { onLogin: (token: string) => void }) {
         <input value={email} onChange={event => setEmail(event.target.value)} type="email" required style={loginInputStyle} />
         <label style={{ display: 'block', color: 'var(--muted-foreground)', fontSize: 12, margin: '14px 0 6px' }}>Senha</label>
         <input value={password} onChange={event => setPassword(event.target.value)} type="password" required minLength={isMaster ? 8 : undefined} title={isMaster ? "Mínimo de 8 caracteres, com letras e números" : undefined} style={loginInputStyle} />
+        {needsCode && !isMaster && (
+          <>
+            <label style={{ display: 'block', color: 'var(--muted-foreground)', fontSize: 12, margin: '14px 0 6px' }}>Código de verificação (2FA)</label>
+            <input value={code} onChange={event => setCode(event.target.value)} type="text" inputMode="numeric" autoComplete="one-time-code" maxLength={6} required autoFocus style={loginInputStyle} />
+          </>
+        )}
         {error && <div style={{ color: 'var(--status-critical)', fontSize: 12, marginTop: 12 }}>{error}</div>}
         <button className="btn btn-primary" type="submit" disabled={loading} style={{ width: '100%', marginTop: 20 }}>
           {loading ? 'Aguarde...' : isMaster ? 'Criar e entrar' : 'Entrar'}

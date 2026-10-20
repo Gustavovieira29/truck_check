@@ -1,8 +1,10 @@
-﻿from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
+from backend.app.auditoria import audit
 from backend.app.database import get_db
-from backend.app.models import Usuario
+from backend.app.models import Auditoria, Sessao, Usuario
+from backend.app.protection import client_ip
 from backend.app.schemas import UsuarioCreate, UsuarioMe, UsuarioResponse
 from backend.app.security import hash_password, require_authenticated_user, validate_password_strength
 
@@ -30,8 +32,17 @@ def require_master(db: Session = Depends(get_db), subject: str = Depends(require
 def me(db: Session = Depends(get_db), subject: str = Depends(require_authenticated_user)):
     usuario = _current(db, subject)
     if usuario:
-        return UsuarioMe(nome=usuario.nome, email=usuario.email, perfil=usuario.perfil)
+        return UsuarioMe(nome=usuario.nome, email=usuario.email, perfil=usuario.perfil, totpAtivo=bool(usuario.totp_ativo))
     return UsuarioMe(nome='admin', email=subject, perfil='master' if subject == 'admin' else 'usuario')
+
+
+@router.get('/auditoria', dependencies=[Depends(require_master)])
+def list_audit(db: Session = Depends(get_db)):
+    rows = db.query(Auditoria).order_by(Auditoria.id.desc()).limit(200).all()
+    return [
+        {'id': r.id, 'criadoEm': r.criado_em.isoformat() + 'Z', 'evento': r.evento, 'email': r.email, 'ip': r.ip, 'detalhe': r.detalhe}
+        for r in rows
+    ]
 
 
 @router.get('', response_model=list[UsuarioResponse], dependencies=[Depends(require_master)])
@@ -40,7 +51,7 @@ def list_users(db: Session = Depends(get_db)):
 
 
 @router.post('', response_model=UsuarioResponse, status_code=status.HTTP_201_CREATED, dependencies=[Depends(require_master)])
-def create_user(payload: UsuarioCreate, db: Session = Depends(get_db)):
+def create_user(payload: UsuarioCreate, request: Request, db: Session = Depends(get_db), subject: str = Depends(require_master)):
     nome = payload.nome.strip()
     email = payload.email.strip().casefold()
     if not nome or '@' not in email:
@@ -57,15 +68,18 @@ def create_user(payload: UsuarioCreate, db: Session = Depends(get_db)):
     db.add(usuario)
     db.commit()
     db.refresh(usuario)
+    audit(db, 'usuario_criado', subject, client_ip(request), f'{usuario.email} ({usuario.perfil})')
     return usuario
 
 
 @router.delete('/{user_id}', status_code=status.HTTP_204_NO_CONTENT)
-def delete_user(user_id: int, db: Session = Depends(get_db), subject: str = Depends(require_master)):
+def delete_user(user_id: int, request: Request, db: Session = Depends(get_db), subject: str = Depends(require_master)):
     usuario = db.query(Usuario).filter(Usuario.id == user_id).first()
     if not usuario:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Usuário não encontrado.')
     if usuario.email == subject:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Você não pode excluir o próprio usuário.')
+    db.query(Sessao).filter(Sessao.email == usuario.email).update({'revogada': True})
     db.delete(usuario)
     db.commit()
+    audit(db, 'usuario_excluido', subject, client_ip(request), usuario.email)

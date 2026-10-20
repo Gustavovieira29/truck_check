@@ -1,4 +1,4 @@
-﻿from datetime import date
+from datetime import date
 from typing import Optional, List
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -147,8 +147,9 @@ class PartResponse(PartBase):
 
 
 class LoginRequest(BaseModel):
-    email: str
-    password: str
+    email: str = Field(max_length=254)
+    password: str = Field(max_length=128)
+    code: Optional[str] = Field(default=None, max_length=10)
 
 
 class LoginResponse(BaseModel):
@@ -157,9 +158,9 @@ class LoginResponse(BaseModel):
 
 
 class MasterCreate(BaseModel):
-    nome: str
-    email: str
-    password: str
+    nome: str = Field(max_length=120)
+    email: str = Field(max_length=254)
+    password: str = Field(max_length=128)
 
 
 class AuthStatus(BaseModel):
@@ -168,9 +169,9 @@ class AuthStatus(BaseModel):
 
 
 class UsuarioCreate(BaseModel):
-    nome: str
-    email: str
-    password: str
+    nome: str = Field(max_length=120)
+    email: str = Field(max_length=254)
+    password: str = Field(max_length=128)
     perfil: str = 'usuario'
 
 
@@ -188,3 +189,4 @@ class UsuarioMe(BaseModel):
     nome: str
     email: str
     perfil: str
+    totpAtivo: bool = False

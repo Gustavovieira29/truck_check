@@ -3,7 +3,11 @@ import hashlib
 import hmac
 import json
 import os
+import secrets
+import struct
 import time
+from datetime import datetime, timedelta
+from urllib.parse import quote
 
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
@@ -11,10 +15,11 @@ from sqlalchemy.orm import Session
 
 from backend.app.config import settings
 from backend.app.database import get_db
-from backend.app.models import Usuario
+from backend.app.models import Sessao, Usuario
 
 _bearer_scheme = HTTPBearer(auto_error=False)
 _TOKEN_LIFETIME_SECONDS = 8 * 60 * 60
+_IDLE_TIMEOUT_SECONDS = 30 * 60
 
 
 def _encode(value: bytes) -> str:
@@ -33,9 +38,16 @@ def _signing_secret() -> bytes:
     return secret.encode('utf-8')
 
 
-def create_access_token(subject: str = 'admin') -> str:
+def create_access_token(db: Session, subject: str = 'admin', ip: str | None = None) -> str:
+    """Cria a sessão no banco (revogável) e devolve o token assinado que a referencia."""
+    jti = secrets.token_urlsafe(24)
+    now = datetime.utcnow()
+    db.add(Sessao(jti=jti, email=subject, ip=ip, criado_em=now, ultimo_uso=now,
+                  expira_em=now + timedelta(seconds=_TOKEN_LIFETIME_SECONDS)))
+    db.query(Sessao).filter(Sessao.expira_em < now - timedelta(days=1)).delete()
+    db.commit()
     payload = _encode(json.dumps(
-        {'sub': subject, 'exp': int(time.time()) + _TOKEN_LIFETIME_SECONDS},
+        {'sub': subject, 'jti': jti, 'exp': int(time.time()) + _TOKEN_LIFETIME_SECONDS},
         separators=(',', ':'),
     ).encode('utf-8'))
     signature = _encode(hmac.new(_signing_secret(), payload.encode('ascii'), hashlib.sha256).digest())
@@ -75,14 +87,67 @@ def require_authenticated_user(
         ) from None
 
     subject = str(payload['sub'])
-    if subject != 'admin' and not db.query(Usuario.id).filter(Usuario.email == subject, Usuario.ativo.is_(True)).first():
+    now = datetime.utcnow()
+    sessao = db.query(Sessao).filter(Sessao.jti == str(payload.get('jti', ''))).first()
+    valid = (
+        sessao is not None
+        and not sessao.revogada
+        and sessao.email == subject
+        and sessao.expira_em > now
+        and now - sessao.ultimo_uso <= timedelta(seconds=_IDLE_TIMEOUT_SECONDS)
+        and (subject == 'admin' or db.query(Usuario.id).filter(Usuario.email == subject, Usuario.ativo.is_(True)).first())
+    )
+    if not valid:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail='Sessão inválida ou expirada. Entre novamente.',
             headers={'WWW-Authenticate': 'Bearer'},
         )
+    if now - sessao.ultimo_uso > timedelta(seconds=60):
+        sessao.ultimo_uso = now
+        db.commit()
 
     return subject
+
+
+def revoke_session(db: Session, credentials: HTTPAuthorizationCredentials | None) -> None:
+    if credentials is None:
+        return
+    try:
+        payload_part = credentials.credentials.split('.', 1)[0]
+        payload = json.loads(base64.urlsafe_b64decode(payload_part + '=' * (-len(payload_part) % 4)))
+        db.query(Sessao).filter(Sessao.jti == str(payload.get('jti', ''))).update({'revogada': True})
+        db.commit()
+    except (ValueError, TypeError, UnicodeError, json.JSONDecodeError):
+        return
+
+
+def bearer_credentials(credentials: HTTPAuthorizationCredentials | None = Depends(_bearer_scheme)) -> HTTPAuthorizationCredentials | None:
+    return credentials
+
+
+def generate_totp_secret() -> str:
+    return base64.b32encode(os.urandom(20)).decode('ascii').rstrip('=')
+
+
+def _totp_at(secret: str, counter: int) -> str:
+    key = base64.b32decode(secret + '=' * (-len(secret) % 8))
+    digest = hmac.new(key, struct.pack('>Q', counter), hashlib.sha1).digest()
+    offset = digest[-1] & 0x0F
+    code = (struct.unpack('>I', digest[offset:offset + 4])[0] & 0x7FFFFFFF) % 1_000_000
+    return f'{code:06d}'
+
+
+def verify_totp(secret: str, code: str) -> bool:
+    code = (code or '').strip().replace(' ', '')
+    if len(code) != 6 or not code.isdigit():
+        return False
+    counter = int(time.time() // 30)
+    return any(hmac.compare_digest(_totp_at(secret, counter + drift), code) for drift in (-1, 0, 1))
+
+
+def totp_uri(secret: str, email: str) -> str:
+    return f'otpauth://totp/TruckCheck:{quote(email)}?secret={secret}&issuer=TruckCheck&digits=6&period=30'
 
 def hash_password(password: str) -> str:
     salt = os.urandom(16)

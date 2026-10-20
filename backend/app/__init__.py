@@ -5,7 +5,7 @@ import logging
 from pathlib import Path
 
 from backend.app.config import settings
-from backend.app.database import Base, engine
+from backend.app.database import Base, engine, ensure_columns
 from backend.app.routes.assets import router as assets_router
 from backend.app.routes.auth import router as auth_router
 from backend.app.routes.inspections import router as inspections_router
@@ -49,6 +49,7 @@ app.add_middleware(SecurityMiddleware)
 def startup_event() -> None:
 	try:
 		Base.metadata.create_all(bind=engine)
+		ensure_columns()
 	except Exception as exc:  # pragma: no cover - protects local demo startup
 		logger.warning('Database initialization failed; continuing with app startup. Error: %s', exc)
 

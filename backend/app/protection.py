@@ -3,17 +3,13 @@ import threading
 import time
 from collections import defaultdict, deque
 
-from fastapi import HTTPException, Request, status
+from fastapi import Request
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse
 
 logger = logging.getLogger('truck_check_security')
 
 MAX_BODY_BYTES = 16 * 1024 * 1024
-LOGIN_MAX_FAILURES = 5
-LOGIN_MAX_FAILURES_PER_IP = 20
-LOGIN_WINDOW_SECONDS = 15 * 60
-LOGIN_LOCK_SECONDS = 15 * 60
 API_MAX_REQUESTS = 240
 API_WINDOW_SECONDS = 60
 
@@ -23,56 +19,6 @@ def client_ip(request: Request) -> str:
     if forwarded:
         return forwarded.split(',')[0].strip()
     return request.client.host if request.client else 'unknown'
-
-
-class LoginGuard:
-    """Bloqueia temporariamente quem erra a senha muitas vezes (força bruta)."""
-
-    def __init__(self) -> None:
-        self._failures: dict[str, deque[float]] = defaultdict(deque)
-        self._locked_until: dict[str, float] = {}
-        self._lock = threading.Lock()
-
-    @staticmethod
-    def _keys(ip: str, email: str) -> tuple[str, str]:
-        return f'ip:{ip}', f'email:{email}'
-
-    def check(self, ip: str, email: str) -> None:
-        now = time.time()
-        with self._lock:
-            for key in self._keys(ip, email):
-                until = self._locked_until.get(key, 0)
-                if until > now:
-                    wait = int(until - now) + 1
-                    raise HTTPException(
-                        status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                        detail=f'Muitas tentativas. Tente novamente em {wait // 60 + 1} minuto(s).',
-                        headers={'Retry-After': str(wait)},
-                    )
-                self._locked_until.pop(key, None)
-
-    def register_failure(self, ip: str, email: str) -> None:
-        now = time.time()
-        with self._lock:
-            for key in self._keys(ip, email):
-                attempts = self._failures[key]
-                attempts.append(now)
-                while attempts and attempts[0] < now - LOGIN_WINDOW_SECONDS:
-                    attempts.popleft()
-                limit = LOGIN_MAX_FAILURES_PER_IP if key.startswith('ip:') else LOGIN_MAX_FAILURES
-                if len(attempts) >= limit:
-                    self._locked_until[key] = now + LOGIN_LOCK_SECONDS
-                    attempts.clear()
-                    logger.warning('Login bloqueado por excesso de falhas: %s', key)
-
-    def register_success(self, ip: str, email: str) -> None:
-        with self._lock:
-            for key in self._keys(ip, email):
-                self._failures.pop(key, None)
-                self._locked_until.pop(key, None)
-
-
-login_guard = LoginGuard()
 
 
 SECURITY_HEADERS = {

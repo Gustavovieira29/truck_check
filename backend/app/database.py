@@ -1,4 +1,4 @@
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.orm import declarative_base, sessionmaker
 
 from backend.app.config import settings
@@ -15,3 +15,17 @@ def get_db():
         yield db
     finally:
         db.close()
+
+
+def ensure_columns() -> None:
+    """Adiciona colunas novas em tabelas já existentes (create_all não altera tabelas)."""
+    wanted = {'usuarios': {'totp_secret': 'VARCHAR', 'totp_ativo': 'BOOLEAN NOT NULL DEFAULT FALSE'}}
+    inspector = inspect(engine)
+    with engine.begin() as connection:
+        for table, columns in wanted.items():
+            if not inspector.has_table(table):
+                continue
+            existing = {column['name'] for column in inspector.get_columns(table)}
+            for name, ddl in columns.items():
+                if name not in existing:
+                    connection.execute(text(f'ALTER TABLE {table} ADD COLUMN {name} {ddl}'))

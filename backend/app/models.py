@@ -107,3 +107,28 @@ class Usuario(Base):
     perfil = Column(String, nullable=False, default='master')
     ativo = Column(Boolean, nullable=False, default=True)
     criado_em = Column(DateTime, nullable=False, default=datetime.utcnow)
+    totp_secret = Column(String, nullable=True)
+    totp_ativo = Column(Boolean, nullable=False, default=False)
+
+
+class Sessao(Base):
+    __tablename__ = 'sessoes'
+
+    jti = Column(String, primary_key=True)
+    email = Column(String, index=True, nullable=False)
+    ip = Column(String, nullable=True)
+    criado_em = Column(DateTime, nullable=False, default=datetime.utcnow)
+    ultimo_uso = Column(DateTime, nullable=False, default=datetime.utcnow)
+    expira_em = Column(DateTime, nullable=False)
+    revogada = Column(Boolean, nullable=False, default=False)
+
+
+class Auditoria(Base):
+    __tablename__ = 'auditoria'
+
+    id = Column(Integer, primary_key=True, index=True)
+    criado_em = Column(DateTime, nullable=False, default=datetime.utcnow, index=True)
+    evento = Column(String, nullable=False, index=True)
+    email = Column(String, nullable=True, index=True)
+    ip = Column(String, nullable=True, index=True)
+    detalhe = Column(String, nullable=True)
