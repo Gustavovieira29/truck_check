@@ -13,10 +13,18 @@ from backend.app.routes.maintenance import router as maintenance_router
 from backend.app.routes.parts import router as parts_router
 from backend.app.routes.reports import router as reports_router
 from backend.app.routes.users import router as users_router
+from backend.app.protection import SecurityMiddleware
 from backend.app.security import require_authenticated_user
 
 
-app = FastAPI(title='Truck Check API', version='1.0.0')
+IS_PRODUCTION = settings.app_env.casefold() == 'production'
+app = FastAPI(
+	title='Truck Check API',
+	version='1.0.0',
+	docs_url=None if IS_PRODUCTION else '/docs',
+	redoc_url=None,
+	openapi_url=None if IS_PRODUCTION else '/openapi.json',
+)
 UPLOAD_DIR = Path(__file__).resolve().parent.parent / 'uploads'
 UPLOAD_DIR.mkdir(exist_ok=True)
 app.mount('/uploads', StaticFiles(directory=UPLOAD_DIR), name='uploads')
@@ -31,9 +39,10 @@ app.add_middleware(
 	CORSMiddleware,
 	allow_origins=cors_origins,
 	allow_credentials=True,
-	allow_methods=['*'],
-	allow_headers=['*'],
+	allow_methods=['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+	allow_headers=['Authorization', 'Content-Type'],
 )
+app.add_middleware(SecurityMiddleware)
 
 
 @app.on_event('startup')

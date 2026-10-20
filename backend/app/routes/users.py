@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 from backend.app.database import get_db
 from backend.app.models import Usuario
 from backend.app.schemas import UsuarioCreate, UsuarioMe, UsuarioResponse
-from backend.app.security import hash_password, require_authenticated_user
+from backend.app.security import hash_password, require_authenticated_user, validate_password_strength
 
 router = APIRouter()
 
@@ -45,8 +45,9 @@ def create_user(payload: UsuarioCreate, db: Session = Depends(get_db)):
     email = payload.email.strip().casefold()
     if not nome or '@' not in email:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail='Informe nome e e-mail válidos.')
-    if len(payload.password) < 6:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail='A senha deve ter ao menos 6 caracteres.')
+    password_error = validate_password_strength(payload.password)
+    if password_error:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=password_error)
     if payload.perfil not in ('master', 'usuario'):
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail='Perfil inválido.')
     if db.query(Usuario.id).filter(Usuario.email == email).first():

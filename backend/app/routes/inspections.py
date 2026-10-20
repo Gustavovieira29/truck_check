@@ -1,6 +1,5 @@
-import base64
+﻿import base64
 import json
-import mimetypes
 import uuid
 from datetime import date
 from pathlib import Path
@@ -17,6 +16,17 @@ from backend.app.schemas import InspectionCreate, InspectionResponse
 
 router = APIRouter()
 UPLOAD_DIR = Path(__file__).resolve().parent.parent.parent / 'uploads'
+
+
+ALLOWED_IMAGE_TYPES = {'image/jpeg': '.jpg', 'image/png': '.png', 'image/webp': '.webp'}
+
+
+def _matches_image_signature(data: bytes, media_type: str) -> bool:
+    if media_type == 'image/jpeg':
+        return data.startswith(b'\xff\xd8\xff')
+    if media_type == 'image/png':
+        return data.startswith(b'\x89PNG\r\n\x1a\n')
+    return data[:4] == b'RIFF' and data[8:12] == b'WEBP'
 
 
 class AnalyzeRequest(BaseModel):
@@ -64,7 +74,9 @@ def analyze_inspection(payload: AnalyzeRequest):
     if len(raw_image) > 10 * 1024 * 1024:
         raise HTTPException(status_code=413, detail='A imagem excede o limite de 10 MB.')
 
-    extension = mimetypes.guess_extension(media_type) or '.jpg'
+    extension = ALLOWED_IMAGE_TYPES.get(media_type)
+    if extension is None or not _matches_image_signature(raw_image, media_type):
+        raise HTTPException(status_code=415, detail='Envie apenas imagens JPEG, PNG ou WebP válidas.')
     filename = f'{uuid.uuid4().hex}{extension}'
     (UPLOAD_DIR / filename).write_bytes(raw_image)
     image_url = f'/uploads/{filename}'

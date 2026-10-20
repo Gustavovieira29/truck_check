@@ -69,7 +69,7 @@ export default function Users() {
         <form onSubmit={event => void createUser(event)} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           <Field label="Nome"><input required value={form.nome} onChange={event => update('nome', event.target.value)} style={inputStyle} /></Field>
           <Field label="E-mail"><input required type="email" value={form.email} onChange={event => update('email', event.target.value)} style={inputStyle} /></Field>
-          <Field label="Senha (mín. 6 caracteres)"><input required type="password" minLength={6} value={form.password} onChange={event => update('password', event.target.value)} style={inputStyle} /></Field>
+          <Field label="Senha (mín. 8, com letras e números)"><input required type="password" minLength={8} value={form.password} onChange={event => update('password', event.target.value)} style={inputStyle} /></Field>
           <Field label="Perfil">
             <select value={form.perfil} onChange={event => update('perfil', event.target.value)} style={inputStyle}>
               <option value="usuario">Usuário</option>

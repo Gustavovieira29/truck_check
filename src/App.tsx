@@ -292,7 +292,7 @@ function Login({ onLogin }: { onLogin: (token: string) => void }) {
         <label style={{ display: 'block', color: 'var(--muted-foreground)', fontSize: 12, margin: isMaster ? '14px 0 6px' : '0 0 6px' }}>E-mail</label>
         <input value={email} onChange={event => setEmail(event.target.value)} type="email" required style={loginInputStyle} />
         <label style={{ display: 'block', color: 'var(--muted-foreground)', fontSize: 12, margin: '14px 0 6px' }}>Senha</label>
-        <input value={password} onChange={event => setPassword(event.target.value)} type="password" required minLength={isMaster ? 6 : undefined} style={loginInputStyle} />
+        <input value={password} onChange={event => setPassword(event.target.value)} type="password" required minLength={isMaster ? 8 : undefined} title={isMaster ? "Mínimo de 8 caracteres, com letras e números" : undefined} style={loginInputStyle} />
         {error && <div style={{ color: 'var(--status-critical)', fontSize: 12, marginTop: 12 }}>{error}</div>}
         <button className="btn btn-primary" type="submit" disabled={loading} style={{ width: '100%', marginTop: 20 }}>
           {loading ? 'Aguarde...' : isMaster ? 'Criar e entrar' : 'Entrar'}

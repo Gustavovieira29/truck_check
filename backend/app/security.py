@@ -7,11 +7,14 @@ import time
 
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from sqlalchemy.orm import Session
 
 from backend.app.config import settings
+from backend.app.database import get_db
+from backend.app.models import Usuario
 
 _bearer_scheme = HTTPBearer(auto_error=False)
-_TOKEN_LIFETIME_SECONDS = 7 * 24 * 60 * 60
+_TOKEN_LIFETIME_SECONDS = 8 * 60 * 60
 
 
 def _encode(value: bytes) -> str:
@@ -41,6 +44,7 @@ def create_access_token(subject: str = 'admin') -> str:
 
 def require_authenticated_user(
     credentials: HTTPAuthorizationCredentials | None = Depends(_bearer_scheme),
+    db: Session = Depends(get_db),
 ) -> str:
     if credentials is None or credentials.scheme.casefold() != 'bearer':
         raise HTTPException(
@@ -70,7 +74,15 @@ def require_authenticated_user(
             headers={'WWW-Authenticate': 'Bearer'},
         ) from None
 
-    return str(payload['sub'])
+    subject = str(payload['sub'])
+    if subject != 'admin' and not db.query(Usuario.id).filter(Usuario.email == subject, Usuario.ativo.is_(True)).first():
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail='Sessão inválida ou expirada. Entre novamente.',
+            headers={'WWW-Authenticate': 'Bearer'},
+        )
+
+    return subject
 
 def hash_password(password: str) -> str:
     salt = os.urandom(16)
@@ -92,7 +104,26 @@ def verify_password(password: str, stored: str) -> bool:
 
 def optional_authenticated_user(
     credentials: HTTPAuthorizationCredentials | None = Depends(_bearer_scheme),
+    db: Session = Depends(get_db),
 ) -> str | None:
     if credentials is None:
         return None
-    return require_authenticated_user(credentials)
+    return require_authenticated_user(credentials, db)
+
+
+_DUMMY_HASH = hash_password('senha-falsa-para-igualar-tempo')
+
+
+def burn_password_time(password: str) -> None:
+    """Gasta o mesmo tempo de uma verificação real para não revelar se o e-mail existe."""
+    verify_password(password, _DUMMY_HASH)
+
+
+def validate_password_strength(password: str) -> str | None:
+    if len(password) < 8:
+        return 'A senha deve ter ao menos 8 caracteres.'
+    if len(password) > 128:
+        return 'A senha deve ter no máximo 128 caracteres.'
+    if not any(c.isalpha() for c in password) or not any(c.isdigit() for c in password):
+        return 'A senha deve conter letras e números.'
+    return None
