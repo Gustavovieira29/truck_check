@@ -249,6 +249,9 @@ function Login({ onLogin }: { onLogin: (token: string) => void }) {
   const [password, setPassword] = useState('')
   const [code, setCode] = useState('')
   const [needsCode, setNeedsCode] = useState(false)
+  const [error, setError] = useState('')
+  const [loading, setLoading] = useState(false)
+  const isMaster = mode === 'master'
 
   useEffect(() => {
     fetch(apiUrl('/api/auth/status'))
