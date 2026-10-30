@@ -93,13 +93,21 @@ export default function PhotoInspection() {
       const analysis = await response.json() as { image_url: string; ai_score: number; ai_findings: string[]; ai_status: InspectionReport['aiStatus'] }
       setAnalysisImageUrl(analysis.image_url.startsWith('http') ? analysis.image_url : apiUrl(analysis.image_url))
       setResult({ aiScore: analysis.ai_score, aiFindings: analysis.ai_findings, aiStatus: analysis.ai_status, approved: false })
-    } catch {
-      setResult(MOCK_ANALYSIS)
+    } catch (error) {
+      setResult(null)
       setAnalysisImageUrl(null)
-      toast.warning('Análise demonstrativa', { description: 'A análise real não respondeu; exibindo o resultado local.' })
+      toast.error('Falha na análise por IA', { description: error instanceof Error ? error.message : 'A análise não respondeu.' })
     } finally {
       setAiState('done')
     }
+  }
+
+  const removeImage = () => {
+    setPreview(null)
+    setResult(null)
+    setAnalysisImageUrl(null)
+    setAiState('idle')
+    if (inputRef.current) inputRef.current.value = ''
   }
 
   const handleDrop = (e: React.DragEvent) => {
@@ -323,10 +331,15 @@ export default function PhotoInspection() {
             />
           </div>
 
-          {aiState === 'idle' && preview && (
-            <button className="btn btn-ghost" style={{ marginTop: 10, fontSize: 12 }} onClick={() => { setPreview(null); setResult(null); setAiState('idle') }}>
-              ↩ Remover imagem
-            </button>
+          {(aiState === 'idle' || aiState === 'done') && preview && (
+            <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+              <button className="btn btn-ghost" style={{ fontSize: 12 }} onClick={removeImage}>
+                ✕ Remover imagem
+              </button>
+              <button className="btn btn-ghost" style={{ fontSize: 12 }} onClick={() => inputRef.current?.click()}>
+                ↻ Trocar por outra imagem
+              </button>
+            </div>
           )}
         </div>
 

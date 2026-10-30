@@ -17,7 +17,7 @@ class Settings(BaseSettings):
     admin_password: Optional[str] = None
     auth_token_secret: Optional[str] = None
     gemini_api_key: Optional[str] = None
-    gemini_model: str = 'gemini-2.0-flash'
+    gemini_model: str = 'gemini-2.5-flash'
     google_client_id: Optional[str] = None
     google_client_secret: Optional[str] = None
     google_refresh_token: Optional[str] = None
